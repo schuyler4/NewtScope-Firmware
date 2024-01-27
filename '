@@ -1,0 +1,75 @@
+#include "pico/stdlib.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "hardware/dma.h"
+
+#include "led.pio.h"
+
+#include "main.h"
+
+#define PIN_COUNT 8
+#define FIFO_REGISTER_WIDTH 32
+
+int main(void)
+{
+    PIO pio = pio0;
+
+    uint offset = pio_add_program(pio, &led_program);
+
+    run_led_program(pio, 0, offset, 3); 
+
+    while(1)
+    {
+    }
+    // The program should never return. 
+    return 1;
+}
+
+void run_led_program(PIO pio, uint sm, uint offset, uint freq)
+{
+    led_program_init(pio, sm, offset, PICO_DEFAULT_LED_PIN);
+    pio_sm_set_enabled(pio, sm, true);
+    //pio->txf[sm] = (clock_get_hz(clk_sys) / (2*freq)) - 3;
+} 
+
+
+void sampler_init(PIO pio, uint sm, uint pin_base, float div)
+{
+    uint16_t sampling_instructions = pio_encode_in(pio_pins, PIN_COUNT);
+    struct pio_program sample_prog = {
+        .instructions = &sampling_instructions
+        .length = 1
+        .origin = -1
+    }
+    uint offset = pio_add_program(pio, &sampling_instructions);
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_in_pins(&c, pin_base);
+    sm_config_set_wrap(&c, offset, offset);
+    sm_config_set_in_shift(&c, true, true, FIFO_REGISTER_WIDTH);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
+size_t capture_size_words, uint trigger_pin, bool trigger_level)
+{
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_clear_fifos(pio, sm);
+    pio_sm_restart(pio, sm);
+
+    dma_channel_config c = dma_channel_get_default_config(dma_chan);
+    channel_config_set_read_increment(&c, false);
+    channel_config_set_write_increment(&c, true);
+    channel_config_set_dreg(&c, pio_get_dreg(pio, sm, false));
+
+    dma_channel_configure(dma_chan, &c, 
+        capture_buf, 
+        &pio->rxf[sm],
+        capture_size_words,
+        true
+    );
+    
+    pio_sm_exec(pio, sm, pin_encode_wait_gpio(trigger_level, trigger_pin));
+    pio_sm_set_enabled(pio, sm, true);
+}
+  
