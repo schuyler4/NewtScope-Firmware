@@ -13,5 +13,6 @@ void run_led_program(PIO pio, uint sm, uint offset, uint freq);
 void sampler_init(PIO pio, uint sm, uint pin_base);
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
 size_t capture_size_words, uint trigger_pin, bool trigger_level);
+void print_samples(uint32_t* sample_buffer, uint sample_buffer_length);
 
 #endif

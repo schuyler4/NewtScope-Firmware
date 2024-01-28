@@ -48,7 +48,6 @@ int main(void)
     sampler_init(pio, sm, PIN_BASE); 
     printf("Arming Trigger\n");
     arm_sampler(pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true); 
-    dma_channel_wait_for_finish_blocking(dma_channel);
 
     // PWM TEST -------------------------------------
     gpio_set_function(PIN_BASE, GPIO_FUNC_PWM);
@@ -66,10 +65,12 @@ int main(void)
     pwm_hw->slice[0].csr = PWM_CH0_CSR_EN_BITS;
 
     // ----------------------------------------------
+    dma_channel_wait_for_finish_blocking(dma_channel);
 
     while(1)
     {
         printf("Made it to here\n");
+        print_samples(capture_buffer, SAMPLE_COUNT);
     }
 
     // The program should never return. 
@@ -124,3 +125,27 @@ size_t capture_size_words, uint trigger_pin, bool trigger_level)
     pio_sm_set_enabled(pio, sm, true);
 }
   
+void print_samples(uint32_t* sample_buffer, uint sample_buffer_length)
+{
+    uint32_t j;
+    for(j = 0; j < PIN_COUNT; j++)
+    {
+        printf("PIN %d", j);
+        uint32_t i;
+        for(i = 0; i < sample_buffer_length; i++)
+        {
+            uint bit_index = j + i*PIN_COUNT;
+            uint word_index = bit_index / FIFO_REGISTER_WIDTH;
+            uint word_mask = 1 << bit_index % FIFO_REGISTER_WIDTH;
+            if(sample_buffer[word_index] & word_mask)
+            {
+                printf("0");
+            } 
+            else
+            {
+                printf("1");
+            }
+        } 
+        printf("\n");
+    }
+}
