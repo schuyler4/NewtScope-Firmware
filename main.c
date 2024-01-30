@@ -29,6 +29,10 @@
 #define FIFO_REGISTER_WIDTH 32
 #define PIN_BASE 16
 #define SAMPLE_COUNT 96
+#define SAMPLE_FREQUENCY "125000000"
+
+#define SPECS_COMMAND 's'
+#define TRIGGER_COMMAND 't'
 
 int main(void)
 {
@@ -69,8 +73,24 @@ int main(void)
 
     while(1)
     {
-        printf("Made it to here\n");
-        print_samples(capture_buffer, SAMPLE_COUNT);
+        char command = (char)getchar();
+        switch(command)
+        {
+            case SPECS_COMMAND:
+                printf("START\n");
+                printf("FS:%s\n", SAMPLE_FREQUENCY);        
+                printf("END\n");
+                break;
+            case TRIGGER_COMMAND:
+                printf("START\n");
+                print_samples(capture_buffer, SAMPLE_COUNT);
+                printf("END\n");
+                break;
+            default:
+                // Do nothing
+                break;
+        }
+
     }
 
     // The program should never return. 
