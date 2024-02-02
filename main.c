@@ -28,11 +28,12 @@
 #define PIN_COUNT 8
 #define FIFO_REGISTER_WIDTH 32
 #define PIN_BASE 16
-#define SAMPLE_COUNT 96
+#define SAMPLE_COUNT 65540
 #define SAMPLE_FREQUENCY "125000000"
 
 #define SPECS_COMMAND 's'
 #define TRIGGER_COMMAND 't'
+//130ns
 
 int main(void)
 {
