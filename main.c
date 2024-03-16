@@ -1,7 +1,7 @@
 //
 //  FILENAME: main.c
 //
-// TODO: description: This is the main program for Base Scope. It records samples,
+// TODO: description: This is the main program for Newt Scope. It records samples,
 // and stores frames using DMA. On a trigger condition, the trigger frame can be sent
 // to a master processor. Additionally, the trigger level can be adjusted from the 
 // master processor, and the master processor can assert a force trigger. Also,
@@ -21,9 +21,8 @@
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/pwm.h"
 
-#include "led.pio.h"
-
 #include "main.h"
+#include "simu_waveform.h"
 
 #define PIN_COUNT 8
 #define FIFO_REGISTER_WIDTH 32
@@ -33,7 +32,7 @@
 
 #define SPECS_COMMAND 's'
 #define TRIGGER_COMMAND 't'
-//130ns
+#define FORCE_TRIGGER_COMMAND 'f'
 
 int main(void)
 {
@@ -46,30 +45,12 @@ int main(void)
     uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
     hard_assert(capture_buffer);
 
-    PIO pio = pio0;
+    PIO sampler_pio = pio0;
     uint sm = 0;
     uint dma_channel = 0;
 
-    sampler_init(pio, sm, PIN_BASE); 
-    printf("Arming Trigger\n");
-    arm_sampler(pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true); 
-
-    // PWM TEST -------------------------------------
-    gpio_set_function(PIN_BASE, GPIO_FUNC_PWM);
-    gpio_set_function(PIN_BASE + 1, GPIO_FUNC_PWM);
-    // Topmost value of 3: count from 0 to 3 and then wrap, so period is 4 cycles
-    pwm_hw->slice[0].top = 3;
-    // Divide frequency by two to slow things down a little
-    pwm_hw->slice[0].div = 4 << PWM_CH0_DIV_INT_LSB;
-    // Set channel A to be high for 1 cycle each period (duty cycle 1/4) and
-    // channel B for 3 cycles (duty cycle 3/4)
-    pwm_hw->slice[0].cc =
-         (1 << PWM_CH0_CC_A_LSB) |
-         (3 << PWM_CH0_CC_B_LSB);
-    // Enable this PWM slice
-    pwm_hw->slice[0].csr = PWM_CH0_CSR_EN_BITS;
-
-    // ----------------------------------------------
+    sampler_init(sampler_pio, sm, PIN_BASE); 
+    simulate_waveform();
     dma_channel_wait_for_finish_blocking(dma_channel);
 
     while(1)
@@ -84,7 +65,14 @@ int main(void)
                 break;
             case TRIGGER_COMMAND:
                 printf("START\n");
+                printf("Arming Trigger\n");
+                arm_sampler(sampler_pio, 
+                    sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true); 
                 print_samples(capture_buffer, SAMPLE_COUNT);
+                printf("END\n");
+                break;
+            case FORCE_TRIGGER_COMMAND:
+                printf("START\n");
                 printf("END\n");
                 break;
             default:
@@ -97,12 +85,6 @@ int main(void)
     // The program should never return. 
     return 1;
 }
-
-void run_led_program(PIO pio, uint sm, uint offset, uint freq)
-{
-    led_program_init(pio, sm, offset, PICO_DEFAULT_LED_PIN);
-    pio_sm_set_enabled(pio, sm, true);
-} 
 
 void sampler_init(PIO pio, uint sm, uint pin_base)
 {

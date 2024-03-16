@@ -1,0 +1,7 @@
+.program adc_clock
+    set pindirs, 1
+
+.wrap_target
+    set pins, 1
+    set pins, 0
+.wrap
