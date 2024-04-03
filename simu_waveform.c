@@ -1,4 +1,7 @@
 #include "pico/stdlib.h"
+#include "hardware/structs/pwm.h"
+
+#include "main.h"
 
 void simulate_waveform(void)
 {

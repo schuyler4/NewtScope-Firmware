@@ -8,7 +8,7 @@
 // the attenuation of the analog front end is adjusted based on the scale selected
 // by the master processor.  
 //
-// Written by Marek Newton with help from pico logic analyzer example.
+// Written by Marek Newton.
 //
 
 #include <stdio.h>
@@ -24,15 +24,11 @@
 #include "main.h"
 #include "simu_waveform.h"
 
-#define PIN_COUNT 8
-#define FIFO_REGISTER_WIDTH 32
-#define PIN_BASE 16
-#define SAMPLE_COUNT 65540
-#define SAMPLE_FREQUENCY "125000000"
+#include "build/adc_clock.pio.h"
 
-#define SPECS_COMMAND 's'
-#define TRIGGER_COMMAND 't'
-#define FORCE_TRIGGER_COMMAND 'f'
+#define TEST_PIN 15
+
+static uint8_t trigger_flag = 0;
 
 int main(void)
 {
@@ -51,7 +47,14 @@ int main(void)
 
     sampler_init(sampler_pio, sm, PIN_BASE); 
     simulate_waveform();
-    dma_channel_wait_for_finish_blocking(dma_channel);
+    
+    // Temporary sampling test
+    while(1)
+    {
+        arm_sampler(sampler_pio, 
+                sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true);
+        dma_channel_wait_for_finish_blocking(dma_channel);
+    }
 
     while(1)
     {
@@ -65,9 +68,6 @@ int main(void)
                 break;
             case TRIGGER_COMMAND:
                 printf("START\n");
-                printf("Arming Trigger\n");
-                arm_sampler(sampler_pio, 
-                    sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true); 
                 print_samples(capture_buffer, SAMPLE_COUNT);
                 printf("END\n");
                 break;
@@ -79,11 +79,18 @@ int main(void)
                 // Do nothing
                 break;
         }
-
     }
 
     // The program should never return. 
     return 1;
+}
+
+void setup_IO(void)
+{
+    gpio_init(TRIGGER_PIN);
+    gpio_set_dir(TRIGGER_PIN, GPIO_IN);
+    uint32_t event_mask = GPIO_IRQ_EDGE_RISE;
+    gpio_set_irq_enabled_with_callback(TRIGGER_PIN, event_mask, ENABLE, trigger_callback);
 }
 
 void sampler_init(PIO pio, uint sm, uint pin_base)
@@ -107,7 +114,7 @@ void sampler_init(PIO pio, uint sm, uint pin_base)
 }
 
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
-size_t capture_size_words, uint trigger_pin, bool trigger_level)
+    size_t capture_size_words, uint trigger_pin, bool trigger_level)
 {
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
@@ -124,8 +131,14 @@ size_t capture_size_words, uint trigger_pin, bool trigger_level)
         true
     );
     
-    pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, trigger_pin));
+    // Used to trigger through the PIO
+    // pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, BASE_PIN));
     pio_sm_set_enabled(pio, sm, true);
+}
+
+void trigger_callback(uint gpio, uint32_t event_mask)
+{
+    trigger_flag = 1;
 }
   
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length)
