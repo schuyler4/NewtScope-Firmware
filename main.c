@@ -23,8 +23,7 @@
 
 #include "main.h"
 #include "simu_waveform.h"
-
-#include "build/adc_clock.pio.h"
+#include "serial_protocol.h"
 
 #define TEST_PIN 15
 
@@ -33,7 +32,6 @@ static uint8_t trigger_flag = 0;
 int main(void)
 {
     stdio_init_all();
-    printf("Starting Sampler\n");
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     
     uint total_sample_bits = SAMPLE_COUNT*PIN_COUNT;
@@ -46,7 +44,6 @@ int main(void)
     uint dma_channel = 0;
 
     sampler_init(sampler_pio, sm, PIN_BASE); 
-    simulate_waveform();
     
     // Temporary sampling test
     while(1)
@@ -62,19 +59,18 @@ int main(void)
         switch(command)
         {
             case SPECS_COMMAND:
-                printf("START\n");
-                printf("FS:%s\n", SAMPLE_FREQUENCY);        
-                printf("END\n");
                 break;
             case TRIGGER_COMMAND:
-                printf("START\n");
+                printf(START_COMMAND);
                 print_samples(capture_buffer, SAMPLE_COUNT);
-                printf("END\n");
+                printf(END_COMMAND);
                 break;
             case FORCE_TRIGGER_COMMAND:
-                printf("START\n");
-                printf("END\n");
                 break;
+            case SIMU_TRIGGER_COMMAND:
+                printf(START_COMMAND);
+                printf(END_COMMAND);
+                break; 
             default:
                 // Do nothing
                 break;
@@ -90,7 +86,7 @@ void setup_IO(void)
     gpio_init(TRIGGER_PIN);
     gpio_set_dir(TRIGGER_PIN, GPIO_IN);
     uint32_t event_mask = GPIO_IRQ_EDGE_RISE;
-    gpio_set_irq_enabled_with_callback(TRIGGER_PIN, event_mask, ENABLE, trigger_callback);
+    gpio_set_irq_enabled_with_callback(TRIGGER_PIN, event_mask, 1, trigger_callback);
 }
 
 void sampler_init(PIO pio, uint sm, uint pin_base)
@@ -109,7 +105,6 @@ void sampler_init(PIO pio, uint sm, uint pin_base)
     sm_config_set_clkdiv(&c, 1);
     sm_config_set_in_shift(&c, true, true, FIFO_REGISTER_WIDTH);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-
     pio_sm_init(pio, sm, offset, &c);
 }
 
@@ -125,10 +120,8 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
 
     dma_channel_configure(dma_channel, &c, 
-        capture_buffer, 
-        &pio->rxf[sm],
-        capture_size_words,
-        true
+        capture_buffer, &pio->rxf[sm],
+        capture_size_words, true
     );
     
     // Used to trigger through the PIO
