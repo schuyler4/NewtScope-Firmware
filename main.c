@@ -11,6 +11,7 @@
 // Written by Marek Newton.
 //
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -46,12 +47,25 @@ int main(void)
     sampler_init(sampler_pio, sm, PIN_BASE); 
     
     // Temporary sampling test
-    while(1)
-    {
+    /*while(1) {
         arm_sampler(sampler_pio, 
                 sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true);
+                
         dma_channel_wait_for_finish_blocking(dma_channel);
+    }*/
+
+    /*
+    while(1)
+    {
+        uint16_t xx[SIMU_WAVEFORM_POINTS];
+        simulate_waveform(xx, SIMU_WAVEFORM_POINTS);
+        uint32_t n;
+        for(n = 0; n < SIMU_WAVEFORM_POINTS; n++)
+        {
+            printf("%d\n", xx[n]);
+        }   
     }
+    */
 
     while(1)
     {
@@ -68,9 +82,12 @@ int main(void)
             case FORCE_TRIGGER_COMMAND:
                 break;
             case SIMU_TRIGGER_COMMAND:
-                printf(START_COMMAND);
-                printf(END_COMMAND);
+                {
+                uint16_t xx[SIMU_WAVEFORM_POINTS];
+                simulate_waveform(xx, SIMU_WAVEFORM_POINTS);
+                transmit_vector(xx, SIMU_WAVEFORM_POINTS);
                 break; 
+                }
             default:
                 // Do nothing
                 break;
@@ -132,6 +149,17 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
 void trigger_callback(uint gpio, uint32_t event_mask)
 {
     trigger_flag = 1;
+}
+
+void transmit_vector(uint16_t* vector, uint16_t point_count)
+{
+    printf(START_COMMAND);
+    uint32_t n;
+    for(n = 0; n < point_count; n++)
+    {
+        printf("%d\n", vector[n]);
+    }
+    printf(END_COMMAND);
 }
   
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length)

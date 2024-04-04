@@ -13,5 +13,7 @@ N = 50
 nn = [n for n in range(0, N)]
 vv = [quantize(attenuator(A*sin((2*pi*n)/N)) + OFFSET) for n in nn] 
 
+print(vv)
+
 plt.stem(nn, vv)   
 plt.show()

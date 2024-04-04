@@ -1,11 +1,3 @@
-//
-// FILENAME: main.h
-//
-// description: Header file for main.c.
-//
-// Written by Marek Newton
-//
-
 #ifndef MAIN_H
 #define MAIN_H
 
@@ -17,6 +9,8 @@
 
 #define TRIGGER_PIN 8
 
+#define SIMU_WAVEFORM_POINTS 50
+
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 
@@ -26,5 +20,6 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     size_t capture_size_words, uint trigger_pin, bool trigger_level);
 void trigger_callback(uint gpio, uint32_t event_mask);
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length);
+void transmit_vector(uint16_t* vector, uint16_t point_count);
 
 #endif
