@@ -4,8 +4,12 @@
 #define PIN_COUNT 8
 #define FIFO_REGISTER_WIDTH 32
 #define PIN_BASE 0
-#define SAMPLE_COUNT 500
+#define SAMPLE_COUNT 5000
 #define SAMPLE_FREQUENCY "125000000"
+
+#define CLOCK_PIN 21
+#define PS_SET_PIN 23
+#define RANGE_PIN 27 
 
 #define TRIGGER_PIN 8
 

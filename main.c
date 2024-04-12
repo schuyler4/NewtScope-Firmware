@@ -11,6 +11,7 @@
 // Written by Marek Newton.
 //
 
+#include <pico/stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,7 +35,8 @@ int main(void)
 {
     stdio_init_all();
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
-    
+    clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
+   
     uint total_sample_bits = SAMPLE_COUNT*PIN_COUNT;
     uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
     uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
@@ -45,28 +47,7 @@ int main(void)
     uint dma_channel = 0;
 
     sampler_init(sampler_pio, sm, PIN_BASE); 
-    
-    // Temporary sampling test
-    /*while(1) {
-        arm_sampler(sampler_pio, 
-                sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true);
-                
-        dma_channel_wait_for_finish_blocking(dma_channel);
-    }*/
-
-    /*
-    while(1)
-    {
-        uint16_t xx[SIMU_WAVEFORM_POINTS];
-        simulate_waveform(xx, SIMU_WAVEFORM_POINTS);
-        uint32_t n;
-        for(n = 0; n < SIMU_WAVEFORM_POINTS; n++)
-        {
-            printf("%d\n", xx[n]);
-        }   
-    }
-    */
-
+   
     while(1)
     {
         char command = (char)getchar();
@@ -74,8 +55,14 @@ int main(void)
         {
             case SPECS_COMMAND:
                 break;
+            case RANGE_COMMAND:
+                gpio_put(RANGE_PIN, !gpio_get(RANGE_PIN));
+                break;
             case TRIGGER_COMMAND:
                 printf(START_COMMAND);
+                arm_sampler(sampler_pio, 
+                    sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true);
+                dma_channel_wait_for_finish_blocking(dma_channel);
                 print_samples(capture_buffer, SAMPLE_COUNT);
                 printf(END_COMMAND);
                 break;
@@ -100,10 +87,18 @@ int main(void)
 
 void setup_IO(void)
 {
+    gpio_init(PS_SET_PIN);
     gpio_init(TRIGGER_PIN);
+    gpio_init(RANGE_PIN);
+    
     gpio_set_dir(TRIGGER_PIN, GPIO_IN);
-    uint32_t event_mask = GPIO_IRQ_EDGE_RISE;
-    gpio_set_irq_enabled_with_callback(TRIGGER_PIN, event_mask, 1, trigger_callback);
+    gpio_set_dir(PS_SET_PIN, GPIO_OUT);
+    gpio_set_dir(RANGE_PIN, GPIO_OUT);
+
+    gpio_put(PS_SET_PIN, 1); 
+    gpio_put(RANGE_PIN, 0);
+    
+    gpio_set_irq_enabled_with_callback(TRIGGER_PIN, GPIO_IRQ_EDGE_RISE, 1, trigger_callback);
 }
 
 void sampler_init(PIO pio, uint sm, uint pin_base)
@@ -161,28 +156,38 @@ void transmit_vector(uint16_t* vector, uint16_t point_count)
     }
     printf(END_COMMAND);
 }
+
+static inline uint bits_packed_per_word(uint pin_count) 
+{
+    const uint SHIFT_REG_WIDTH = 32;
+    return SHIFT_REG_WIDTH - (SHIFT_REG_WIDTH % pin_count);
+}
   
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length)
 {
+    uint record_size_bits = bits_packed_per_word(PIN_COUNT);
+    uint32_t samples[SAMPLE_COUNT];
     uint32_t j;
+    for(j = 0; j < SAMPLE_COUNT; j++)
+    {
+        samples[j] = 0; 
+    }
     for(j = 0; j < PIN_COUNT; j++)
     {
-        printf("PIN %d", j);
         uint32_t i;
+        printf("%d\n", j);
         for(i = 0; i < sample_buffer_length; i++)
         {
-            uint bit_index = j + i*PIN_COUNT;
-            uint word_index = bit_index / FIFO_REGISTER_WIDTH;
-            uint word_mask = 1 << bit_index % FIFO_REGISTER_WIDTH;
-            if(sample_buffer[word_index] & word_mask)
-            {
-                printf("0");
-            } 
-            else
-            {
-                printf("1");
-            }
+            uint bit_index = j + i * PIN_COUNT;
+            uint word_index = bit_index / record_size_bits;
+            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
+            uint8_t bit = sample_buffer[word_index] & word_mask ? 1 : 0;
+            samples[i] |= (bit << j);
         } 
         printf("\n");
+    }
+    for(j = 0; j < SAMPLE_COUNT; j++)
+    {
+        printf("%d\n", samples[j]); 
     }
 }
