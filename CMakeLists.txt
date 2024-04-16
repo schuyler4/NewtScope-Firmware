@@ -10,7 +10,8 @@ pico_sdk_init()
 
 add_executable(${PROJECT_NAME} 
     main.c
-    simu_waveform.c)
+    simu_waveform.c
+    mcp41010.c)
 
 pico_add_extra_outputs(${PROJECT_NAME})
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
@@ -20,3 +21,4 @@ target_link_libraries(${PROJECT_NAME} pico_stdlib)
 target_link_libraries(${PROJECT_NAME} hardware_pio)
 target_link_libraries(${PROJECT_NAME} hardware_clocks)
 target_link_libraries(${PROJECT_NAME} hardware_dma)
+target_link_libraries(${PROJECT_NAME} hardware_spi)

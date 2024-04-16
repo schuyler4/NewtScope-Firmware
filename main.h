@@ -4,7 +4,7 @@
 #define PIN_COUNT 8
 #define FIFO_REGISTER_WIDTH 32
 #define PIN_BASE 0
-#define SAMPLE_COUNT 5000
+#define SAMPLE_COUNT 20000
 #define SAMPLE_FREQUENCY "125000000"
 
 #define CLOCK_PIN 21
@@ -15,10 +15,17 @@
 
 #define SIMU_WAVEFORM_POINTS 50
 
+#define SPI_SCK_FREQUENCY 10000
+#define SPI_SCK 10
+#define SPI_RX 12
+#define SPI_TX 11
+#define CS_PIN 13
+
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 
 void setup_IO(void);
+void setup_SPI(void);
 void sampler_init(PIO pio, uint sm, uint pin_base);
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
     size_t capture_size_words, uint trigger_pin, bool trigger_level);

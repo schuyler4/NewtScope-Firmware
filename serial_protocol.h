@@ -8,6 +8,8 @@
 #define TRIGGER_COMMAND 't'
 #define SIMU_TRIGGER_COMMAND 'S'
 #define FORCE_TRIGGER_COMMAND 'f'
-#define RANGE_COMMAND 'r'
+#define LOW_RANGE_COMMAND 'r'
+#define HIGH_RANGE_COMMAND 'R'
+#define TRIGGER_LEVEL_COMMAND 'l'
 
 #endif

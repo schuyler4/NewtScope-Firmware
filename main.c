@@ -22,10 +22,12 @@
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/pwm.h"
+#include "hardware/spi.h"
 
 #include "main.h"
 #include "simu_waveform.h"
 #include "serial_protocol.h"
+#include "mcp41010.h"
 
 #define TEST_PIN 15
 
@@ -34,6 +36,8 @@ static uint8_t trigger_flag = 0;
 int main(void)
 {
     stdio_init_all();
+    setup_IO();
+    setup_SPI();
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
    
@@ -47,7 +51,6 @@ int main(void)
     uint dma_channel = 0;
 
     sampler_init(sampler_pio, sm, PIN_BASE); 
-   
     while(1)
     {
         char command = (char)getchar();
@@ -55,8 +58,11 @@ int main(void)
         {
             case SPECS_COMMAND:
                 break;
-            case RANGE_COMMAND:
-                gpio_put(RANGE_PIN, !gpio_get(RANGE_PIN));
+            case HIGH_RANGE_COMMAND:
+                gpio_put(RANGE_PIN, 0);
+                break;
+            case LOW_RANGE_COMMAND:
+                gpio_put(RANGE_PIN, 1);
                 break;
             case TRIGGER_COMMAND:
                 printf(START_COMMAND);
@@ -70,11 +76,20 @@ int main(void)
                 break;
             case SIMU_TRIGGER_COMMAND:
                 {
-                uint16_t xx[SIMU_WAVEFORM_POINTS];
-                simulate_waveform(xx, SIMU_WAVEFORM_POINTS);
-                transmit_vector(xx, SIMU_WAVEFORM_POINTS);
-                break; 
+                    uint16_t xx[SIMU_WAVEFORM_POINTS];
+                    simulate_waveform(xx, SIMU_WAVEFORM_POINTS);
+                    transmit_vector(xx, SIMU_WAVEFORM_POINTS);
+                    break; 
                 }
+            case TRIGGER_LEVEL_COMMAND:
+                {
+                    uint8_t pot_code = (uint8_t)getchar();
+                    if(pot_code <= MAX_POT_CODE && pot_code >= MIN_POT_CODE)
+                    {
+                        write_pot_code(&pot_code);
+                    }
+                }
+                break;
             default:
                 // Do nothing
                 break;
@@ -90,15 +105,26 @@ void setup_IO(void)
     gpio_init(PS_SET_PIN);
     gpio_init(TRIGGER_PIN);
     gpio_init(RANGE_PIN);
+    gpio_init(CS_PIN);
     
     gpio_set_dir(TRIGGER_PIN, GPIO_IN);
     gpio_set_dir(PS_SET_PIN, GPIO_OUT);
     gpio_set_dir(RANGE_PIN, GPIO_OUT);
+    gpio_set_dir(CS_PIN, GPIO_OUT);
 
     gpio_put(PS_SET_PIN, 1); 
     gpio_put(RANGE_PIN, 0);
+    gpio_put(CS_PIN, 1);
     
     gpio_set_irq_enabled_with_callback(TRIGGER_PIN, GPIO_IRQ_EDGE_RISE, 1, trigger_callback);
+}
+
+void setup_SPI(void)
+{
+    spi_init(spi1, SPI_SCK_FREQUENCY);
+    gpio_set_function(SPI_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(SPI_RX, GPIO_FUNC_SPI);
+    gpio_set_function(SPI_TX, GPIO_FUNC_SPI);
 }
 
 void sampler_init(PIO pio, uint sm, uint pin_base)
