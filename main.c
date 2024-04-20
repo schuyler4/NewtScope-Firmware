@@ -50,7 +50,6 @@ int main(void)
     uint sm = 0;
     uint dma_channel = 0;
 
-    sampler_init(sampler_pio, sm, PIN_BASE); 
     while(1)
     {
         char command = (char)getchar();
@@ -65,14 +64,22 @@ int main(void)
                 gpio_put(RANGE_PIN, 1);
                 break;
             case TRIGGER_COMMAND:
-                printf(START_COMMAND);
-                arm_sampler(sampler_pio, 
-                    sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, true);
+                printf(START_COMMAND); 
+                sampler_init(sampler_pio, sm, PIN_BASE, 0); 
+                arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
+                            buffer_size_words, PIN_BASE, 1, 0);
                 dma_channel_wait_for_finish_blocking(dma_channel);
                 print_samples(capture_buffer, SAMPLE_COUNT);
                 printf(END_COMMAND);
                 break;
             case FORCE_TRIGGER_COMMAND:
+                printf(START_COMMAND);
+                sampler_init(sampler_pio, sm, PIN_BASE, 1); 
+                arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
+                            buffer_size_words, PIN_BASE, 1, 1);
+                dma_channel_wait_for_finish_blocking(dma_channel);
+                print_samples(capture_buffer, SAMPLE_COUNT);
+                printf(END_COMMAND);
                 break;
             case SIMU_TRIGGER_COMMAND:
                 {
@@ -83,13 +90,16 @@ int main(void)
                 }
             case TRIGGER_LEVEL_COMMAND:
                 {
-                    uint8_t pot_code = (uint8_t)getchar();
+                    char code_string[MAX_STRING_LENGTH];
+                    get_string(code_string);
+                    uint8_t pot_code = atoi(code_string);
                     if(pot_code <= MAX_POT_CODE && pot_code >= MIN_POT_CODE)
                     {
                         write_pot_code(&pot_code);
+                        printf("set pot code\n");
                     }
+                    break;
                 }
-                break;
             default:
                 // Do nothing
                 break;
@@ -98,6 +108,19 @@ int main(void)
 
     // The program should never return. 
     return 1;
+}
+
+void get_string(char* str)
+{
+    uint8_t i;
+    for(i = 0; i < MAX_STRING_LENGTH; i++)
+    {
+        *(str + i) = (char)getchar();
+        if(*(str + i) == '\0')
+        {
+            return;
+        }
+    }
 }
 
 void setup_IO(void)
@@ -127,9 +150,19 @@ void setup_SPI(void)
     gpio_set_function(SPI_TX, GPIO_FUNC_SPI);
 }
 
-void sampler_init(PIO pio, uint sm, uint pin_base)
+void sampler_init(PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
 {
-    uint16_t sampling_instructions = pio_encode_in(pio_pins, PIN_COUNT);
+    uint8_t pin_count;
+    if(!force_trigger)
+    {
+        pin_count = PIN_COUNT + 1;
+    }
+    else
+    {
+        pin_count = PIN_COUNT;
+    }
+
+    uint16_t sampling_instructions = pio_encode_in(pio_pins, pin_count);
     struct pio_program sample_prog = {
         .instructions = &sampling_instructions, 
         .length = 1, 
@@ -147,7 +180,8 @@ void sampler_init(PIO pio, uint sm, uint pin_base)
 }
 
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
-    size_t capture_size_words, uint trigger_pin, bool trigger_level)
+                size_t capture_size_words, uint trigger_pin, bool trigger_level, 
+                uint8_t force_trigger)
 {
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
@@ -157,13 +191,15 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     channel_config_set_write_increment(&c, true);
     channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
 
-    dma_channel_configure(dma_channel, &c, 
-        capture_buffer, &pio->rxf[sm],
-        capture_size_words, true
-    );
+    dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm],
+                          capture_size_words, 1);
     
     // Used to trigger through the PIO
-    // pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, BASE_PIN));
+    if(!force_trigger)
+    {
+        printf("Waiting for trigger data\n");
+        pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, PIN_BASE));
+    }
     pio_sm_set_enabled(pio, sm, true);
 }
 
