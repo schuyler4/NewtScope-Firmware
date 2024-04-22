@@ -41,10 +41,6 @@ int main(void)
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
    
-    uint total_sample_bits = SAMPLE_COUNT*PIN_COUNT;
-    uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-    hard_assert(capture_buffer);
 
     PIO sampler_pio = pio0;
     uint sm = 0;
@@ -64,23 +60,35 @@ int main(void)
                 gpio_put(RANGE_PIN, 1);
                 break;
             case TRIGGER_COMMAND:
-                printf(START_COMMAND); 
-                sampler_init(sampler_pio, sm, PIN_BASE, 0); 
-                arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
-                            buffer_size_words, PIN_BASE, 1, 0);
-                dma_channel_wait_for_finish_blocking(dma_channel);
-                print_samples(capture_buffer, SAMPLE_COUNT);
-                printf(END_COMMAND);
-                break;
+                {
+                    uint total_sample_bits = SAMPLE_COUNT*TRIGGER_PIN_COUNT;
+                    uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+                    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+                    hard_assert(capture_buffer);
+                    printf(START_COMMAND); 
+                    sampler_init(sampler_pio, sm, PIN_BASE, 0); 
+                    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
+                                buffer_size_words, PIN_BASE, 1, 0);
+                    dma_channel_wait_for_finish_blocking(dma_channel);
+                    print_samples(capture_buffer, SAMPLE_COUNT, 0);
+                    printf(END_COMMAND);
+                    break;
+                }
             case FORCE_TRIGGER_COMMAND:
-                printf(START_COMMAND);
-                sampler_init(sampler_pio, sm, PIN_BASE, 1); 
-                arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
-                            buffer_size_words, PIN_BASE, 1, 1);
-                dma_channel_wait_for_finish_blocking(dma_channel);
-                print_samples(capture_buffer, SAMPLE_COUNT);
-                printf(END_COMMAND);
-                break;
+                {
+                    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
+                    uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+                    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+                    hard_assert(capture_buffer);
+                    printf(START_COMMAND);
+                    sampler_init(sampler_pio, sm, PIN_BASE, 1); 
+                    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
+                                buffer_size_words, PIN_BASE, 1, 1);
+                    dma_channel_wait_for_finish_blocking(dma_channel);
+                    print_samples(capture_buffer, SAMPLE_COUNT, 1);
+                    printf(END_COMMAND);
+                    break;
+                }
             case SIMU_TRIGGER_COMMAND:
                 {
                     uint16_t xx[SIMU_WAVEFORM_POINTS];
@@ -126,11 +134,9 @@ void get_string(char* str)
 void setup_IO(void)
 {
     gpio_init(PS_SET_PIN);
-    gpio_init(TRIGGER_PIN);
     gpio_init(RANGE_PIN);
     gpio_init(CS_PIN);
     
-    gpio_set_dir(TRIGGER_PIN, GPIO_IN);
     gpio_set_dir(PS_SET_PIN, GPIO_OUT);
     gpio_set_dir(RANGE_PIN, GPIO_OUT);
     gpio_set_dir(CS_PIN, GPIO_OUT);
@@ -155,11 +161,11 @@ void sampler_init(PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
     uint8_t pin_count;
     if(!force_trigger)
     {
-        pin_count = PIN_COUNT + 1;
+        pin_count = TRIGGER_PIN_COUNT;
     }
     else
     {
-        pin_count = PIN_COUNT;
+        pin_count = FORCE_TRIGGER_PIN_COUNT;
     }
 
     uint16_t sampling_instructions = pio_encode_in(pio_pins, pin_count);
@@ -198,7 +204,7 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     if(!force_trigger)
     {
         printf("Waiting for trigger data\n");
-        pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, PIN_BASE));
+        pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, TRIGGER_PIN));
     }
     pio_sm_set_enabled(pio, sm, true);
 }
@@ -225,22 +231,40 @@ static inline uint bits_packed_per_word(uint pin_count)
     return SHIFT_REG_WIDTH - (SHIFT_REG_WIDTH % pin_count);
 }
   
-void print_samples(uint32_t* sample_buffer, uint sample_buffer_length)
+void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger)
 {
-    uint record_size_bits = bits_packed_per_word(PIN_COUNT);
+    uint8_t pin_count;
+    if(force_trigger)
+    {
+        pin_count = FORCE_TRIGGER_PIN_COUNT;
+    }
+    else
+    {
+        pin_count = TRIGGER_PIN_COUNT;
+    }
+    uint record_size_bits = bits_packed_per_word(pin_count);
     uint32_t samples[SAMPLE_COUNT];
     uint32_t j;
     for(j = 0; j < SAMPLE_COUNT; j++)
     {
         samples[j] = 0; 
     }
-    for(j = 0; j < PIN_COUNT; j++)
+    uint8_t sample_pin_count;
+    if(!force_trigger)
+    {
+        sample_pin_count = pin_count -1;
+    }
+    else
+    {
+        sample_pin_count = pin_count;
+    }
+    for(j = 0; j < sample_pin_count; j++)
     {
         uint32_t i;
         printf("%d\n", j);
         for(i = 0; i < sample_buffer_length; i++)
         {
-            uint bit_index = j + i * PIN_COUNT;
+            uint bit_index = j + i * pin_count;
             uint word_index = bit_index / record_size_bits;
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
             uint8_t bit = sample_buffer[word_index] & word_mask ? 1 : 0;
