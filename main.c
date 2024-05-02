@@ -46,6 +46,8 @@ int main(void)
     uint sm = 0;
     uint dma_channel = 0;
 
+    uint8_t sampler_created = 0;
+
     while(1)
     {
         char command = (char)getchar();
@@ -66,12 +68,17 @@ int main(void)
                     uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
                     hard_assert(capture_buffer);
                     printf(START_COMMAND); 
-                    sampler_init(sampler_pio, sm, PIN_BASE, 0); 
+                    if(!sampler_created)
+                    {
+                        sampler_init(sampler_pio, sm, PIN_BASE, 0); 
+                        sampler_created = 1;
+                    }
                     arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
                                 buffer_size_words, PIN_BASE, 1, 0);
                     dma_channel_wait_for_finish_blocking(dma_channel);
                     print_samples(capture_buffer, SAMPLE_COUNT, 0);
                     printf(END_COMMAND);
+                    free(capture_buffer);
                     break;
                 }
             case FORCE_TRIGGER_COMMAND:
@@ -81,12 +88,18 @@ int main(void)
                     uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
                     hard_assert(capture_buffer);
                     printf(START_COMMAND);
-                    sampler_init(sampler_pio, sm, PIN_BASE, 1); 
-                    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
+                    if(!sampler_created)
+                    {
+                        sampler_init(sampler_pio, sm, PIN_BASE, 1); 
+                        sampler_created = 1;
+                    }
+                    arm_sampler(sampler_pio, sm, dma_channel,  
+                                capture_buffer, 
                                 buffer_size_words, PIN_BASE, 1, 1);
                     dma_channel_wait_for_finish_blocking(dma_channel);
                     print_samples(capture_buffer, SAMPLE_COUNT, 1);
                     printf(END_COMMAND);
+                    free(capture_buffer);
                     break;
                 }
             case SIMU_TRIGGER_COMMAND:
@@ -252,7 +265,7 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
     uint8_t sample_pin_count;
     if(!force_trigger)
     {
-        sample_pin_count = pin_count -1;
+        sample_pin_count = pin_count - 1;
     }
     else
     {
