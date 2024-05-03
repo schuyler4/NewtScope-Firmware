@@ -29,9 +29,11 @@
 
 void setup_IO(void);
 void setup_SPI(void);
-void sampler_init(PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger);
+uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, 
+                    uint8_t pin_base, uint8_t force_trigger);
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
-    size_t capture_size_words, uint trigger_pin, bool trigger_level, uint8_t force_trigger);
+                size_t capture_size_words, uint trigger_pin, bool trigger_level, 
+                uint8_t force_trigger);
 void trigger_callback(uint gpio, uint32_t event_mask);
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
 void transmit_vector(uint16_t* vector, uint16_t point_count);

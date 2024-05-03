@@ -11,5 +11,6 @@
 #define LOW_RANGE_COMMAND 'r'
 #define HIGH_RANGE_COMMAND 'R'
 #define TRIGGER_LEVEL_COMMAND 'l'
+#define CLOCK_DIV_COMMAND 'c'
 
 #endif

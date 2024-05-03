@@ -1,16 +1,3 @@
-//
-//  FILENAME: main.c
-//
-// TODO: description: This is the main program for Newt Scope. It records samples,
-// and stores frames using DMA. On a trigger condition, the trigger frame can be sent
-// to a master processor. Additionally, the trigger level can be adjusted from the 
-// master processor, and the master processor can assert a force trigger. Also,
-// the attenuation of the analog front end is adjusted based on the scale selected
-// by the master processor.  
-//
-// Written by Marek Newton.
-//
-
 #include <pico/stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -39,22 +26,22 @@ int main(void)
     setup_IO();
     setup_SPI();
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
-    clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
+    clock_gpio_init_int_frac(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1, 0);
    
-
     PIO sampler_pio = pio0;
     uint sm = 0;
     uint dma_channel = 0;
 
     uint8_t sampler_created = 0;
+    uint8_t program_offset;
+
+    pio_sm_config c = pio_get_default_sm_config();
 
     while(1)
     {
         char command = (char)getchar();
         switch(command)
         {
-            case SPECS_COMMAND:
-                break;
             case HIGH_RANGE_COMMAND:
                 gpio_put(RANGE_PIN, 0);
                 break;
@@ -70,7 +57,7 @@ int main(void)
                     printf(START_COMMAND); 
                     if(!sampler_created)
                     {
-                        sampler_init(sampler_pio, sm, PIN_BASE, 0); 
+                        program_offset = sampler_init(&c, sampler_pio, sm, PIN_BASE, 0); 
                         sampler_created = 1;
                     }
                     arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, 
@@ -90,7 +77,7 @@ int main(void)
                     printf(START_COMMAND);
                     if(!sampler_created)
                     {
-                        sampler_init(sampler_pio, sm, PIN_BASE, 1); 
+                        sampler_init(&c, sampler_pio, sm, PIN_BASE, 1); 
                         sampler_created = 1;
                     }
                     arm_sampler(sampler_pio, sm, dma_channel,  
@@ -121,6 +108,22 @@ int main(void)
                     }
                     break;
                 }
+            case CLOCK_DIV_COMMAND:
+                {
+                    char code_string[MAX_STRING_LENGTH];
+                    get_string(code_string);
+                    uint16_t clock_div = atoi(code_string);   
+                    if(clock_div > 0)
+                    {
+                        clock_gpio_init_int_frac(CLOCK_PIN, 
+                                                 CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 
+                                                 clock_div, 0);
+                        sm_config_set_clkdiv(&c, clock_div);
+                        // Repeatidly reinitializing may be a problem
+                        pio_sm_init(sampler_pio, sm, program_offset, &c);
+                    } 
+                    break;
+                }    
             default:
                 // Do nothing
                 break;
@@ -169,7 +172,8 @@ void setup_SPI(void)
     gpio_set_function(SPI_TX, GPIO_FUNC_SPI);
 }
 
-void sampler_init(PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
+uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, 
+                    uint8_t pin_base, uint8_t force_trigger)
 {
     uint8_t pin_count;
     if(!force_trigger)
@@ -187,15 +191,15 @@ void sampler_init(PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
         .length = 1, 
         .origin = -1
     };
-    uint offset = pio_add_program(pio, &sample_prog);
-    pio_sm_config c = pio_get_default_sm_config();
 
-    sm_config_set_in_pins(&c, pin_base);
-    sm_config_set_wrap(&c, offset, offset);
-    sm_config_set_clkdiv(&c, 1);
-    sm_config_set_in_shift(&c, true, true, FIFO_REGISTER_WIDTH);
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-    pio_sm_init(pio, sm, offset, &c);
+    uint8_t offset = pio_add_program(pio, &sample_prog);
+    sm_config_set_in_pins(c, pin_base);
+    sm_config_set_wrap(c, offset, offset);
+    sm_config_set_clkdiv(c, 1);
+    sm_config_set_in_shift(c, true, true, FIFO_REGISTER_WIDTH);
+    sm_config_set_fifo_join(c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio, sm, offset, c);
+    return offset;
 }
 
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
