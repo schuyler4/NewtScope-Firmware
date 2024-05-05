@@ -115,12 +115,8 @@ int main(void)
                     uint16_t clock_div = atoi(code_string);   
                     if(clock_div > 0)
                     {
-                        clock_gpio_init_int_frac(CLOCK_PIN, 
-                                                 CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 
-                                                 clock_div, 0);
                         sm_config_set_clkdiv(&c, clock_div);
-                        // Repeatidly reinitializing may be a problem
-                        pio_sm_init(sampler_pio, sm, program_offset, &c);
+                        pio_sm_set_config(sampler_pio, sm, &c);
                     } 
                     break;
                 }    
