@@ -74,7 +74,6 @@ int main(void)
                     uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
                     uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
                     hard_assert(capture_buffer);
-                    printf(START_COMMAND);
                     if(!sampler_created)
                     {
                         sampler_init(&c, sampler_pio, sm, PIN_BASE, 1); 
@@ -85,7 +84,6 @@ int main(void)
                                 buffer_size_words, PIN_BASE, 1, 1);
                     dma_channel_wait_for_finish_blocking(dma_channel);
                     print_samples(capture_buffer, SAMPLE_COUNT, 1);
-                    printf(END_COMMAND);
                     free(capture_buffer);
                     break;
                 }
@@ -274,7 +272,6 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
     for(j = 0; j < sample_pin_count; j++)
     {
         uint32_t i;
-        printf("%d\n", j);
         for(i = 0; i < sample_buffer_length; i++)
         {
             uint bit_index = j + i * pin_count;
@@ -283,10 +280,9 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
             uint8_t bit = sample_buffer[word_index] & word_mask ? 1 : 0;
             samples[i] |= (bit << j);
         } 
-        printf("\n");
     }
     for(j = 0; j < SAMPLE_COUNT; j++)
     {
-        printf("%d\n", samples[j]); 
+        printf("%c", (char)samples[j]); 
     }
 }
