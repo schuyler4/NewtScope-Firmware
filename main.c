@@ -26,7 +26,7 @@ int main(void)
     setup_IO();
     setup_SPI();
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
-    clock_gpio_init_int_frac(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1, 0);
+    clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 2); 
    
     PIO sampler_pio = pio0;
     uint sm = 0;
@@ -189,7 +189,7 @@ uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm,
     uint8_t offset = pio_add_program(pio, &sample_prog);
     sm_config_set_in_pins(c, pin_base);
     sm_config_set_wrap(c, offset, offset);
-    sm_config_set_clkdiv(c, 1);
+    sm_config_set_clkdiv(c, 2);
     sm_config_set_in_shift(c, true, true, FIFO_REGISTER_WIDTH);
     sm_config_set_fifo_join(c, PIO_FIFO_JOIN_RX);
     pio_sm_init(pio, sm, offset, c);
