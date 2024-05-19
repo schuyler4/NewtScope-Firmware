@@ -4,12 +4,17 @@
 #include <stdlib.h>
 
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
+
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/pwm.h"
 #include "hardware/spi.h"
+
+#include "tusb.h"
+#include "usb_descriptors.h"
 
 #include "main.h"
 #include "simu_waveform.h"
