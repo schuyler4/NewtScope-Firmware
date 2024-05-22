@@ -13,9 +13,6 @@
 #include "hardware/structs/pwm.h"
 #include "hardware/spi.h"
 
-#include "tusb.h"
-#include "usb_descriptors.h"
-
 #include "main.h"
 #include "simu_waveform.h"
 #include "serial_protocol.h"
