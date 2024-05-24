@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
@@ -153,8 +154,6 @@ void setup_IO(void)
     gpio_put(PS_SET_PIN, 1); 
     gpio_put(RANGE_PIN, 0);
     gpio_put(CS_PIN, 1);
-    
-    gpio_set_irq_enabled_with_callback(TRIGGER_PIN, GPIO_IRQ_EDGE_RISE, 1, trigger_callback);
 }
 
 void setup_SPI(void)
@@ -283,6 +282,8 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
     }
     for(j = 0; j < SAMPLE_COUNT; j++)
     {
-        printf("%c", (char)samples[j]); 
+        char character = (char)samples[j];
+        write(1, &character, sizeof(character));
+        //printf("%c", (char)samples[j]); 
     }
 }
