@@ -15,7 +15,6 @@
 #include "hardware/spi.h"
 
 #include "main.h"
-#include "simu_waveform.h"
 #include "serial_protocol.h"
 #include "mcp41010.h"
 
@@ -87,13 +86,6 @@ int main(void)
                     free(capture_buffer);
                     break;
                 }
-            case SIMU_TRIGGER_COMMAND:
-                {
-                    uint16_t xx[SIMU_WAVEFORM_POINTS];
-                    simulate_waveform(xx, SIMU_WAVEFORM_POINTS);
-                    transmit_vector(xx, SIMU_WAVEFORM_POINTS);
-                    break; 
-                }
             case TRIGGER_LEVEL_COMMAND:
                 {
                     char code_string[MAX_STRING_LENGTH];
@@ -102,7 +94,6 @@ int main(void)
                     if(pot_code <= MAX_POT_CODE && pot_code >= MIN_POT_CODE)
                     {
                         write_pot_code(&pot_code);
-                        printf("set pot code\n");
                     }
                     break;
                 }
@@ -221,17 +212,6 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
 void trigger_callback(uint gpio, uint32_t event_mask)
 {
     trigger_flag = 1;
-}
-
-void transmit_vector(uint16_t* vector, uint16_t point_count)
-{
-    printf(START_COMMAND);
-    uint32_t n;
-    for(n = 0; n < point_count; n++)
-    {
-        printf("%d\n", vector[n]);
-    }
-    printf(END_COMMAND);
 }
 
 static inline uint bits_packed_per_word(uint pin_count) 

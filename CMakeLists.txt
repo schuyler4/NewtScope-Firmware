@@ -8,10 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
-add_executable(${PROJECT_NAME} 
-    main.c
-    simu_waveform.c
-    mcp41010.c)
+add_executable(${PROJECT_NAME} main.c mcp41010.c)
 
 pico_add_extra_outputs(${PROJECT_NAME})
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
