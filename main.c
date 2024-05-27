@@ -252,7 +252,7 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
         pin_count = FORCE_TRIGGER_PIN_COUNT;
     }
     uint record_size_bits = bits_packed_per_word(pin_count);
-    uint32_t samples[SAMPLE_COUNT];
+    char samples[SAMPLE_COUNT];
     uint32_t j;
     for(j = 0; j < SAMPLE_COUNT; j++)
     {
@@ -260,14 +260,6 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
     }
     uint8_t sample_pin_count;
     sample_pin_count = FORCE_TRIGGER_PIN_COUNT;
-    /*if(!force_trigger)
-    {
-        sample_pin_count = pin_count - 1;
-    }
-    else
-    {
-        sample_pin_count = pin_count;
-    }*/
     for(j = 0; j < sample_pin_count; j++)
     {
         uint32_t i;
@@ -280,10 +272,5 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
             samples[i] |= (bit << j);
         } 
     }
-    for(j = 0; j < SAMPLE_COUNT; j++)
-    {
-        char character = (char)samples[j];
-        write(1, &character, sizeof(character));
-        //printf("%c", (char)samples[j]); 
-    }
+    write(1, samples, sizeof(samples));
 }
