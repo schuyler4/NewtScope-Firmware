@@ -27,6 +27,12 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 
+typedef enum
+{
+    FALLING_EDGE,
+    RISING_EDGE
+} TriggerType;
+
 void setup_IO(void);
 void setup_SPI(void);
 uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, 

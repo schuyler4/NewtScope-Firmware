@@ -21,6 +21,11 @@
 #define TEST_PIN 15
 
 static uint8_t trigger_flag = 0;
+static uint8_t sampler_created = 0;
+static uint dma_channel = 0;
+PIO sampler_pio = pio0;
+uint sm = 0;
+pio_sm_config c;
 
 int main(void)
 {
@@ -30,14 +35,9 @@ int main(void)
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 2); 
    
-    PIO sampler_pio = pio0;
-    uint sm = 0;
-    uint dma_channel = 0;
-
-    uint8_t sampler_created = 0;
     uint8_t program_offset;
-
-    pio_sm_config c = pio_get_default_sm_config();
+    TriggerType trigger_type = RISING_EDGE;
+    c = pio_get_default_sm_config();
 
     while(1)
     {
@@ -52,19 +52,26 @@ int main(void)
                 break;
             case TRIGGER_COMMAND:
                 {
-                    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
-                    uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-                    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-                    hard_assert(capture_buffer);
-                    if(!sampler_created)
+                    while(1)
                     {
-                        sampler_init(&c, sampler_pio, sm, PIN_BASE, 0); 
-                        sampler_created = 1;
+                        if(!gpio_get(TRIGGER_PIN))
+                        {
+                            uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
+                            uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+                            uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+                            hard_assert(capture_buffer);
+                            if(!sampler_created)
+                            {
+                                sampler_init(&c, sampler_pio, sm, PIN_BASE, 0); 
+                                sampler_created = 1;
+                            }
+                            arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, 1, 0);
+                            dma_channel_wait_for_finish_blocking(dma_channel);
+                            print_samples(capture_buffer, SAMPLE_COUNT, 1);
+                            free(capture_buffer);
+                            break;
+                        }
                     }
-                    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, 1, 0);
-                    dma_channel_wait_for_finish_blocking(dma_channel);
-                    print_samples(capture_buffer, SAMPLE_COUNT, 1);
-                    free(capture_buffer);
                     break;
                 }
             case FORCE_TRIGGER_COMMAND:
@@ -137,10 +144,12 @@ void setup_IO(void)
     gpio_init(PS_SET_PIN);
     gpio_init(RANGE_PIN);
     gpio_init(CS_PIN);
+    gpio_init(TRIGGER_PIN);
     
     gpio_set_dir(PS_SET_PIN, GPIO_OUT);
     gpio_set_dir(RANGE_PIN, GPIO_OUT);
     gpio_set_dir(CS_PIN, GPIO_OUT);
+    gpio_set_dir(TRIGGER_PIN, GPIO_IN);
 
     gpio_put(PS_SET_PIN, 1); 
     gpio_put(RANGE_PIN, 0);
@@ -207,11 +216,6 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
         pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, TRIGGER_PIN));
     }
     pio_sm_set_enabled(pio, sm, true);
-}
-
-void trigger_callback(uint gpio, uint32_t event_mask)
-{
-    trigger_flag = 1;
 }
 
 static inline uint bits_packed_per_word(uint pin_count) 
