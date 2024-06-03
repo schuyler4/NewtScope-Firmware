@@ -13,6 +13,7 @@
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/pwm.h"
 #include "hardware/spi.h"
+#include "hardware/pwm.h"
 
 #include "main.h"
 #include "serial_protocol.h"
@@ -30,8 +31,11 @@ pio_sm_config c;
 int main(void)
 {
     stdio_init_all();
+
     setup_IO();
     setup_SPI();
+    setup_cal_pin();
+
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 2); 
    
@@ -85,9 +89,7 @@ int main(void)
                         sampler_init(&c, sampler_pio, sm, PIN_BASE, 1); 
                         sampler_created = 1;
                     }
-                    arm_sampler(sampler_pio, sm, dma_channel,  
-                                capture_buffer, 
-                                buffer_size_words, PIN_BASE, 1, 1);
+                    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, 1, 1);
                     dma_channel_wait_for_finish_blocking(dma_channel);
                     print_samples(capture_buffer, SAMPLE_COUNT, 1);
                     free(capture_buffer);
@@ -154,6 +156,8 @@ void setup_IO(void)
     gpio_put(PS_SET_PIN, 1); 
     gpio_put(RANGE_PIN, 0);
     gpio_put(CS_PIN, 1);
+
+    gpio_set_function(CAL_PIN, GPIO_FUNC_PWM);
 }
 
 void setup_SPI(void)
@@ -164,8 +168,15 @@ void setup_SPI(void)
     gpio_set_function(SPI_TX, GPIO_FUNC_SPI);
 }
 
-uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, 
-                     uint8_t pin_base, uint8_t force_trigger)
+void setup_cal_pin(void)
+{
+    uint8_t slice_number = pwm_gpio_to_slice_num(CAL_PIN);
+    pwm_set_chan_level(slice_number, PWM_CHAN_A, PWM_HIGH_COUNT);
+    pwm_set_clkdiv(slice_number, PWM_CLK_DIV);
+    pwm_set_enabled(slice_number, 1);
+}
+
+uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
 {
     uint8_t pin_count;
     if(!force_trigger)
