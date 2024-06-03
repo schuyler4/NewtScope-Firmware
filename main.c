@@ -54,27 +54,22 @@ int main(void)
             case LOW_RANGE_COMMAND:
                 gpio_put(RANGE_PIN, 1);
                 break;
+            case RISING_EDGE_TRIGGER_COMMAND:
+                trigger_type = RISING_EDGE;
+                break;
+            case FALLING_EDGE_TRIGGER_COMMAND:
+                trigger_type = FALLING_EDGE;
+                break;
             case TRIGGER_COMMAND:
                 {
-                    while(1)
+                    if(!trigger_type)
                     {
-                        if(!gpio_get(TRIGGER_PIN))
-                        {
-                            uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
-                            uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-                            uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-                            hard_assert(capture_buffer);
-                            if(!sampler_created)
-                            {
-                                sampler_init(&c, sampler_pio, sm, PIN_BASE, 0); 
-                                sampler_created = 1;
-                            }
-                            arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, 1, 0);
-                            dma_channel_wait_for_finish_blocking(dma_channel);
-                            print_samples(capture_buffer, SAMPLE_COUNT, 1);
-                            free(capture_buffer);
-                            break;
-                        }
+                        trigger();
+                        break;
+                    }
+                    else
+                    {
+                        trigger_flag = 1;
                     }
                     break;
                 }
@@ -176,6 +171,28 @@ void setup_cal_pin(void)
     pwm_set_enabled(slice_number, 1);
 }
 
+void trigger(void)
+{
+    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
+    int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+    hard_assert(capture_buffer);
+    if(!sampler_created)
+    {
+        sampler_init(&c, sampler_pio, sm, PIN_BASE, 0); 
+        sampler_created = 1;
+    }
+    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, trigger_type, 0);
+    dma_channel_wait_for_finish_blocking(dma_channel);
+    print_samples(capture_buffer, SAMPLE_COUNT, 1);
+    free(capture_buffer);
+}
+
+void trigger_callback(uint gpio, uint32_t event_mask)
+{
+    
+}
+
 uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
 {
     uint8_t pin_count;
@@ -218,8 +235,7 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     channel_config_set_write_increment(&c, true);
     channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
 
-    dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm],
-                          capture_size_words, 1);
+    dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm], capture_size_words, 1);
     
     // Used to trigger through the PIO
     if(!force_trigger)
