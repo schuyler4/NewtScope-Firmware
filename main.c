@@ -13,7 +13,9 @@
 #include "hardware/structs/bus_ctrl.h"
 #include "hardware/structs/pwm.h"
 #include "hardware/spi.h"
+#include "hardware/gpio.h"
 #include "hardware/pwm.h"
+#include "hardware/irq.h"
 
 #include "main.h"
 #include "serial_protocol.h"
@@ -27,6 +29,9 @@ static uint dma_channel = 0;
 PIO sampler_pio = pio0;
 uint sm = 0;
 pio_sm_config c;
+TriggerType trigger_type = RISING_EDGE;
+uint32_t capture_buffer[SAMPLE_COUNT];
+uint8_t force_trigger = 0;
 
 int main(void)
 {
@@ -40,7 +45,6 @@ int main(void)
     clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 2); 
    
     uint8_t program_offset;
-    TriggerType trigger_type = RISING_EDGE;
     c = pio_get_default_sm_config();
 
     while(1)
@@ -49,49 +53,36 @@ int main(void)
         switch(command)
         {
             case HIGH_RANGE_COMMAND:
+                //printf("%c\n", command);
                 gpio_put(RANGE_PIN, 0);
                 break;
             case LOW_RANGE_COMMAND:
+                //printf("%c\n", command);
                 gpio_put(RANGE_PIN, 1);
                 break;
             case RISING_EDGE_TRIGGER_COMMAND:
+                //printf("%c\n", command);
                 trigger_type = RISING_EDGE;
                 break;
             case FALLING_EDGE_TRIGGER_COMMAND:
+                //printf("%c\n", command);
                 trigger_type = FALLING_EDGE;
                 break;
             case TRIGGER_COMMAND:
-                {
-                    if(!trigger_type)
-                    {
-                        trigger();
-                        break;
-                    }
-                    else
-                    {
-                        trigger_flag = 1;
-                    }
-                    break;
-                }
+                //printf("%c\n", command);
+                run_trigger();
+                break;
             case FORCE_TRIGGER_COMMAND:
                 {
-                    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
-                    uint buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-                    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-                    hard_assert(capture_buffer);
-                    if(!sampler_created)
-                    {
-                        sampler_init(&c, sampler_pio, sm, PIN_BASE, 1); 
-                        sampler_created = 1;
-                    }
-                    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, 1, 1);
-                    dma_channel_wait_for_finish_blocking(dma_channel);
-                    print_samples(capture_buffer, SAMPLE_COUNT, 1);
-                    free(capture_buffer);
+                    //printf("%c\n", command);
+                    //printf("About to rigger\n");
+                    force_trigger = 1;
+                    trigger(force_trigger);
                     break;
                 }
             case TRIGGER_LEVEL_COMMAND:
                 {
+                    //printf("%c\n", command);
                     char code_string[MAX_STRING_LENGTH];
                     get_string(code_string);
                     uint8_t pot_code = atoi(code_string);
@@ -103,6 +94,7 @@ int main(void)
                 }
             case CLOCK_DIV_COMMAND:
                 {
+                    //printf("%c\n", command);
                     char code_string[MAX_STRING_LENGTH];
                     get_string(code_string);
                     uint16_t clock_div = atoi(code_string);   
@@ -121,6 +113,30 @@ int main(void)
 
     // The program should never return. 
     return 1;
+}
+
+void run_trigger(void)
+{
+    //printf("Normal Trigger\n");
+    force_trigger = 0;
+    while(1) 
+    {
+        if(!gpio_get(TRIGGER_PIN))
+        {
+            trigger(force_trigger);
+            break;
+        }
+    }
+    /*
+    else
+    {
+        if(!trigger_flag)
+        {
+            gpio_set_irq_enabled_with_callback(TRIGGER_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, 1, trigger_callback);
+            trigger_flag = 1;
+        }
+    }
+    */
 }
 
 void get_string(char* str)
@@ -171,26 +187,21 @@ void setup_cal_pin(void)
     pwm_set_enabled(slice_number, 1);
 }
 
-void trigger(void)
-{
-    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
-    int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-    uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-    hard_assert(capture_buffer);
-    if(!sampler_created)
-    {
-        sampler_init(&c, sampler_pio, sm, PIN_BASE, 0); 
-        sampler_created = 1;
-    }
-    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, trigger_type, 0);
-    dma_channel_wait_for_finish_blocking(dma_channel);
-    print_samples(capture_buffer, SAMPLE_COUNT, 1);
-    free(capture_buffer);
-}
-
 void trigger_callback(uint gpio, uint32_t event_mask)
 {
-    
+    /*
+    if(!gpio_get(TRIGGER_PIN))
+    { 
+        trigger(0);
+    }
+    */
+}
+
+void dma_complete_handler(void)
+{
+    //printf("In DMA callback\n");
+    dma_hw->ints0 = 1 << dma_channel;
+    print_samples(capture_buffer, SAMPLE_COUNT, force_trigger);
 }
 
 uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base, uint8_t force_trigger)
@@ -223,9 +234,10 @@ uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base, ui
 }
 
 void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
-                size_t capture_size_words, uint trigger_pin, bool trigger_level, 
-                uint8_t force_trigger)
+                 size_t capture_size_words, uint trigger_pin, bool trigger_level, 
+                 uint8_t force_trigger)
 {
+    printf("%d\n", capture_size_words);
     pio_sm_set_enabled(pio, sm, false);
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
@@ -236,6 +248,9 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
 
     dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm], capture_size_words, 1);
+    dma_channel_set_irq0_enabled(dma_channel, true);
+    irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
+    irq_set_enabled(DMA_IRQ_0, 1);
     
     // Used to trigger through the PIO
     if(!force_trigger)
@@ -243,6 +258,22 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
         pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, TRIGGER_PIN));
     }
     pio_sm_set_enabled(pio, sm, true);
+}
+
+void trigger(uint8_t forced)
+{
+    //printf("riggering\n");
+    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
+    int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+    //uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+    //hard_assert(capture_buffer);
+    if(!sampler_created)
+    {
+        sampler_init(&c, sampler_pio, sm, PIN_BASE, forced); 
+        sampler_created = 1;
+    }
+    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, trigger_type, forced);
+    //free(capture_buffer);
 }
 
 static inline uint bits_packed_per_word(uint pin_count) 
