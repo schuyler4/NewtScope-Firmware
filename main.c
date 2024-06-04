@@ -52,6 +52,7 @@ int main(void)
         char command = (char)getchar();
         switch(command)
         {
+            /*
             case HIGH_RANGE_COMMAND:
                 //printf("%c\n", command);
                 gpio_put(RANGE_PIN, 0);
@@ -72,14 +73,14 @@ int main(void)
                 //printf("%c\n", command);
                 run_trigger();
                 break;
+                */
             case FORCE_TRIGGER_COMMAND:
                 {
-                    //printf("%c\n", command);
-                    //printf("About to rigger\n");
                     force_trigger = 1;
                     trigger(force_trigger);
                     break;
                 }
+                /*
             case TRIGGER_LEVEL_COMMAND:
                 {
                     //printf("%c\n", command);
@@ -105,6 +106,7 @@ int main(void)
                     } 
                     break;
                 }    
+                */
             default:
                 // Do nothing
                 break;
@@ -262,7 +264,7 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
 
 void trigger(uint8_t forced)
 {
-    //printf("riggering\n");
+    printf("riggering\n");
     uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
     int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
     //uint32_t *capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
