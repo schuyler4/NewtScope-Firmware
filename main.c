@@ -80,10 +80,12 @@ int main(void)
                 trigger_type = FALLING_EDGE;
                 break;
             case TRIGGER_COMMAND:
+                reset_triggers();
                 run_trigger();
                 break;
             case FORCE_TRIGGER_COMMAND:
                 {
+                    reset_triggers();
                     force_trigger = 1;
                     trigger(force_trigger);
                     break;
@@ -111,6 +113,9 @@ int main(void)
                     } 
                     break;
                 }    
+            case STOP_COMMAND:
+                reset_triggers();
+                break;
             default:
                 // Do nothing
                 break;
@@ -119,6 +124,13 @@ int main(void)
 
     // The program should never return. 
     return 1;
+}
+
+void reset_triggers(void)
+{
+    trigger_vector_available = 0;
+    trigger_flag = 0;
+    dma_hw->ints0 = 1 << dma_channel;
 }
 
 void run_trigger(void)
@@ -258,30 +270,19 @@ static inline uint bits_packed_per_word(uint pin_count)
   
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger)
 {
-    uint8_t pin_count;
-    if(force_trigger)
-    {
-        pin_count = FORCE_TRIGGER_PIN_COUNT;
-    }
-    else
-    {
-        pin_count = FORCE_TRIGGER_PIN_COUNT;
-    }
-    uint record_size_bits = bits_packed_per_word(pin_count);
+    uint record_size_bits = bits_packed_per_word(FORCE_TRIGGER_PIN_COUNT);
     char samples[SAMPLE_COUNT];
     uint32_t j;
     for(j = 0; j < SAMPLE_COUNT; j++)
     {
         samples[j] = 0; 
     }
-    uint8_t sample_pin_count;
-    sample_pin_count = FORCE_TRIGGER_PIN_COUNT;
-    for(j = 0; j < sample_pin_count; j++)
+    for(j = 0; j < FORCE_TRIGGER_PIN_COUNT; j++)
     {
         uint32_t i;
         for(i = 0; i < sample_buffer_length; i++)
         {
-            uint bit_index = j + i * pin_count;
+            uint bit_index = j + i * FORCE_TRIGGER_PIN_COUNT;
             uint word_index = bit_index / record_size_bits;
             uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
             uint8_t bit = sample_buffer[word_index] & word_mask ? 1 : 0;

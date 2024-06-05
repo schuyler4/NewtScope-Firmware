@@ -6,7 +6,7 @@
 
 #define SPECS_COMMAND 's'
 #define TRIGGER_COMMAND 't'
-#define SIMU_TRIGGER_COMMAND 'S'
+#define STOP_COMMAND 'S'
 #define FORCE_TRIGGER_COMMAND 'f'
 #define LOW_RANGE_COMMAND 'r'
 #define HIGH_RANGE_COMMAND 'R'

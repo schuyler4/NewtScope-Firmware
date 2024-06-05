@@ -51,5 +51,6 @@ void transmit_vector(uint16_t* vector, uint16_t point_count);
 void get_string(char* str);
 void setup_cal_pin(void);
 void run_trigger(void);
+void reset_triggers(void);
 
 #endif
