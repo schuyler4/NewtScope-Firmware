@@ -14,5 +14,6 @@
 #define CLOCK_DIV_COMMAND 'c'
 #define RISING_EDGE_TRIGGER_COMMAND '/'
 #define FALLING_EDGE_TRIGGER_COMMAND '\\'
+#define SET_CAL 'C'
 
 #endif

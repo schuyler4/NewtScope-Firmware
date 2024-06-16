@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
-add_executable(${PROJECT_NAME} main.c mcp41010.c)
+add_executable(${PROJECT_NAME} main.c mcp41010.c calibration_memory.c)
 
 pico_add_extra_outputs(${PROJECT_NAME})
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
@@ -22,3 +22,4 @@ target_link_libraries(${PROJECT_NAME} hardware_spi)
 target_link_libraries(${PROJECT_NAME} hardware_pwm)
 target_link_libraries(${PROJECT_NAME} hardware_gpio)
 target_link_libraries(${PROJECT_NAME} hardware_irq)
+target_link_libraries(${PROJECT_NAME} hardware_flash)

@@ -16,6 +16,7 @@
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
 #include "hardware/irq.h"
+#include "hardware/flash.h"
 
 #include "main.h"
 #include "serial_protocol.h"
@@ -116,6 +117,13 @@ int main(void)
             case STOP_COMMAND:
                 reset_triggers();
                 break;
+            case SET_CAL:
+                {
+                    char high_range_cal_string[MAX_STRING_LENGTH];
+                    get_string(high_range_cal_string);
+                    uint16_t high_range_cal = atoi(high_range_cal_string);
+                    break;
+                }
             default:
                 // Do nothing
                 break;
