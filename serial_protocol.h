@@ -15,5 +15,6 @@
 #define RISING_EDGE_TRIGGER_COMMAND '/'
 #define FALLING_EDGE_TRIGGER_COMMAND '\\'
 #define SET_CAL 'C'
+#define READ_CAL 'k'
 
 #endif

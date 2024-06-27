@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
@@ -20,6 +21,7 @@
 
 #include "main.h"
 #include "serial_protocol.h"
+#include "calibration_memory.h"
 #include "mcp41010.h"
 
 #define TEST_PIN 15
@@ -119,9 +121,33 @@ int main(void)
                 break;
             case SET_CAL:
                 {
-                    char high_range_cal_string[MAX_STRING_LENGTH];
-                    get_string(high_range_cal_string);
+                    char cal_string[MAX_STRING_LENGTH];
+                    get_string(cal_string);
+                    char* high_range_cal_string = malloc(4*sizeof(char));   
+                    char* low_range_cal_string = malloc(4*sizeof(char));
+                    memcpy(high_range_cal_string, cal_string, 4*sizeof(char));
+                    memcpy(low_range_cal_string, cal_string+4, 4*sizeof(char));
                     uint16_t high_range_cal = atoi(high_range_cal_string);
+                    uint16_t low_range_cal = atoi(low_range_cal_string);
+                    Calibration_Offsets calibration_offsets; 
+                    calibration_offsets.high_range_offset = 1000;
+                    calibration_offsets.low_range_offset = 2000;
+                    write_calibration_offsets(calibration_offsets);
+                    break;
+                }
+            case READ_CAL:
+                {
+                    Calibration_Offsets calibration_offsets;
+                    calibration_offsets.high_range_offset = 1000;
+                    calibration_offsets.low_range_offset = 2000;
+                    uint8_t low_high_range_byte = (uint8_t)(calibration_offsets.high_range_offset & 0xFF);
+                    uint8_t high_high_range_byte = (uint8_t)((calibration_offsets.high_range_offset >> 8) & 0xFF);
+                    uint8_t low_low_range_byte = (uint8_t)(calibration_offsets.low_range_offset & 0xFF);
+                    uint8_t high_low_range_byte = (uint8_t)((calibration_offsets.low_range_offset >> 8) & 0xFF);
+                    write(1, &low_high_range_byte, sizeof(uint8_t));
+                    write(1, &high_high_range_byte, sizeof(uint8_t));
+                    write(1, &low_low_range_byte, sizeof(uint8_t));
+                    write(1, &high_low_range_byte, sizeof(uint8_t)); 
                     break;
                 }
             default:
