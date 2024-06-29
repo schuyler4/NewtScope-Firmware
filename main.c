@@ -130,16 +130,14 @@ int main(void)
                     uint16_t high_range_cal = atoi(high_range_cal_string);
                     uint16_t low_range_cal = atoi(low_range_cal_string);
                     Calibration_Offsets calibration_offsets; 
-                    calibration_offsets.high_range_offset = 1000;
-                    calibration_offsets.low_range_offset = 2000;
+                    calibration_offsets.high_range_offset = high_range_cal;
+                    calibration_offsets.low_range_offset = low_range_cal;
                     write_calibration_offsets(calibration_offsets);
                     break;
                 }
             case READ_CAL:
                 {
-                    Calibration_Offsets calibration_offsets;
-                    calibration_offsets.high_range_offset = 1000;
-                    calibration_offsets.low_range_offset = 2000;
+                    Calibration_Offsets calibration_offsets = read_calibration_offsets();
                     uint8_t low_high_range_byte = (uint8_t)(calibration_offsets.high_range_offset & 0xFF);
                     uint8_t high_high_range_byte = (uint8_t)((calibration_offsets.high_range_offset >> 8) & 0xFF);
                     uint8_t low_low_range_byte = (uint8_t)(calibration_offsets.low_range_offset & 0xFF);

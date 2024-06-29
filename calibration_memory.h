@@ -7,11 +7,11 @@
 
 typedef struct
 {
-    uint16_t high_range_offset;
-    uint16_t low_range_offset;
+    uint32_t high_range_offset;
+    uint32_t low_range_offset;
 } Calibration_Offsets;
 
-#define BUFFER_LENGTH FLASH_PAGE_SIZE/sizeof(uint16_t)
+#define BUFFER_LENGTH FLASH_PAGE_SIZE/sizeof(uint32_t)
 #define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 
 void write_calibration_offsets(Calibration_Offsets calibration_offsets);
