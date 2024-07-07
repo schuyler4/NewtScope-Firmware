@@ -111,7 +111,7 @@ int main(void)
                     uint16_t clock_div = atoi(code_string);   
                     if(clock_div > 0)
                     {
-                        sm_config_set_clkdiv(&c, clock_div);
+                        sm_config_set_clkdiv(&c, clock_div*2);
                         pio_sm_set_config(sampler_pio, sm, &c);
                     } 
                     break;
