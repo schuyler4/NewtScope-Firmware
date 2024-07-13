@@ -281,7 +281,6 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     dma_channel_set_irq0_enabled(dma_channel, true);
     irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
     irq_set_enabled(DMA_IRQ_0, true);
-    dma_channel_set_write_addr(dma_channel, capture_buffer, false);
     
     // Used to trigger through the PIO
     if(!force_trigger)
