@@ -18,6 +18,7 @@
 #include "hardware/pwm.h"
 #include "hardware/irq.h"
 #include "hardware/flash.h"
+#include "hardware/sync.h"
 
 #include "main.h"
 #include "serial_protocol.h"
@@ -117,8 +118,15 @@ int main(void)
                     break;
                 }    
             case STOP_COMMAND:
-                reset_triggers();
-                break;
+                {
+                    uint32_t interrupt_state = save_and_disable_interrupts();
+                    pio_sm_set_enabled(sampler_pio, sm, false);
+                    dma_channel_abort(dma_channel);
+                    irq_set_enabled(DMA_IRQ_0, false);
+                    reset_triggers();
+                    restore_interrupts(interrupt_state);
+                    break;
+                }
             case SET_CAL:
                 {
                     char cal_string[MAX_STRING_LENGTH];
@@ -133,6 +141,8 @@ int main(void)
                     calibration_offsets.high_range_offset = high_range_cal;
                     calibration_offsets.low_range_offset = low_range_cal;
                     write_calibration_offsets(calibration_offsets);
+                    free(high_range_cal_string);
+                    free(low_range_cal_string);
                     break;
                 }
             case READ_CAL:
@@ -270,7 +280,8 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm], capture_size_words, 1);
     dma_channel_set_irq0_enabled(dma_channel, true);
     irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
-    irq_set_enabled(DMA_IRQ_0, 1);
+    irq_set_enabled(DMA_IRQ_0, true);
+    dma_channel_set_write_addr(dma_channel, capture_buffer, false);
     
     // Used to trigger through the PIO
     if(!force_trigger)
@@ -285,7 +296,6 @@ void trigger(uint8_t forced)
     uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
     int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
     capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-    hard_assert(capture_buffer);
     if(!sampler_created)
     {
         sampler_init(&c, sampler_pio, sm, PIN_BASE); 
