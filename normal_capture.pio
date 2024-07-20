@@ -1,0 +1,24 @@
+.program normal_capture
+pull
+mov x osr
+
+NEGATIVE_CAPTURE:
+    in pins 8
+    jmp pin POSITIVE_CAPTURE
+
+POSITIVE_CAPTURE:
+    in pins 8
+    jmp x-- POSITIVE_CAPTURE
+
+    irq 0
+
+% c-sdk {
+    static inline void normal_sampler_init(PIO pio, uint sm, uint offset, uint pin_base, uint jump_pin)
+    {
+        pio_sm_config config = normal_capture_program_default_config(offset);        
+        sm_config_set_in_pins(&config, pin_base);
+        sm_config_set_clkdev(&config, 1);
+        sm_config_set_in_shift(&config, true, true, FIFO_REGISTER_WIDTH);
+        sm_config_set_jmp_pin(&config, jump_pin);
+    }
+}
