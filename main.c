@@ -24,18 +24,25 @@
 #include "serial_protocol.h"
 #include "calibration_memory.h"
 #include "mcp41010.h"
+#include "normal_capture.pio.h"
 
 #define TEST_PIN 15
 
 static uint8_t trigger_flag = 0;
 static uint8_t sampler_created = 0;
 static uint dma_channel = 0;
-PIO sampler_pio = pio0;
-uint sm = 0;
-pio_sm_config c;
+PIO auto_sampler_pio = pio0;
+PIO normal_sampler_pio = pio1;
+uint normal_sampler_sm = 0;
+uint auto_sampler_sm = 0;
+pio_sm_config auto_sampler_config;
+pio_sm_config normal_sampler_config;
+uint normal_sampler_offset;
 TriggerType trigger_type = RISING_EDGE;
 uint32_t *capture_buffer;
 uint8_t force_trigger = 0;
+uint8_t normal_trigger = 0;
+uint8_t sampler_clock_div = 1;
 
 volatile uint8_t trigger_vector_available = 0;
 
@@ -50,8 +57,7 @@ int main(void)
     bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     clock_gpio_init(CLOCK_PIN, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 2); 
    
-    uint8_t program_offset;
-    c = pio_get_default_sm_config();
+    auto_sampler_config = pio_get_default_sm_config();
 
     while(1)
     {
@@ -64,7 +70,7 @@ int main(void)
 
         if(trigger_flag && !gpio_get(TRIGGER_PIN))
         {
-            trigger(force_trigger);
+            trigger(false);
             trigger_flag = 0;
         }
 
@@ -84,9 +90,12 @@ int main(void)
                 trigger_type = FALLING_EDGE;
                 break;
             case TRIGGER_COMMAND:
-                reset_triggers();
-                run_trigger();
-                break;
+                {
+                    reset_triggers();
+                    run_trigger();
+                    normal_trigger = 1;
+                    break;
+                }
             case FORCE_TRIGGER_COMMAND:
                 {
                     reset_triggers();
@@ -109,18 +118,28 @@ int main(void)
                 {
                     char code_string[MAX_STRING_LENGTH];
                     get_string(code_string);
-                    uint16_t clock_div = atoi(code_string);   
+                    sampler_clock_div = atoi(code_string);   
+                    /*
                     if(clock_div > 0)
                     {
-                        sm_config_set_clkdiv(&c, clock_div*2);
-                        pio_sm_set_config(sampler_pio, sm, &c);
+                        if(normal_trigger)
+                        {
+                            sm_config_set_clkdiv(&normal_sampler_config, clock_div*2);
+                            pio_sm_set_config(normal_sampler_pio, normal_sampler_sm, &normal_sampler_config);
+                        }
+                        else
+                        {
+                            sm_config_set_clkdiv(&auto_sampler_config, clock_div*2);
+                            pio_sm_set_config(auto_sampler_pio, auto_sampler_sm, &auto_sampler_config);
+                        }
                     } 
+                    */
                     break;
                 }    
             case STOP_COMMAND:
                 {
                     uint32_t interrupt_state = save_and_disable_interrupts();
-                    pio_sm_set_enabled(sampler_pio, sm, false);
+                    pio_sm_set_enabled(auto_sampler_pio, auto_sampler_sm, false);
                     dma_channel_abort(dma_channel);
                     irq_set_enabled(DMA_IRQ_0, false);
                     reset_triggers();
@@ -180,7 +199,7 @@ void run_trigger(void)
     force_trigger = 0;
     if(!gpio_get(TRIGGER_PIN))
     {
-        trigger(force_trigger);
+        trigger(false);
     }
     else
     {
@@ -243,9 +262,13 @@ void dma_complete_handler(void)
 {
     trigger_vector_available = 1; 
     dma_hw->ints0 = 1 << dma_channel;
+    if(normal_trigger) 
+    {
+        teardown_normal_sampler(normal_sampler_pio, normal_sampler_sm, dma_channel, normal_sampler_offset);
+    }
 }
 
-uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base)
+uint8_t auto_sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base)
 {
     uint16_t sampling_instructions = pio_encode_in(pio_pins, FORCE_TRIGGER_PIN_COUNT);
     struct pio_program sample_prog = {
@@ -282,25 +305,66 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
     irq_set_enabled(DMA_IRQ_0, true);
     
-    // Used to trigger through the PIO
-    if(!force_trigger)
-    {
-        pio_sm_exec(pio, sm, pio_encode_wait_gpio(trigger_level, TRIGGER_PIN));
-    }
     pio_sm_set_enabled(pio, sm, true);
+}
+
+void arm_normal_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, size_t capture_size_words, uint trigger_pin)
+{
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_clear_fifos(pio, sm);
+    pio_sm_restart(pio, sm);
+
+    dma_channel_config c = dma_channel_get_default_config(dma_channel);
+    channel_config_set_read_increment(&c, false);
+    channel_config_set_write_increment(&c, true);
+    channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
+    //channel_config_set_ring(&c, true, 14);
+
+    dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm], capture_size_words, 1);
+    dma_channel_set_irq0_enabled(dma_channel, true);
+
+    //pio_interrupt_clear(pio, 0);
+    //pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
+    irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
+    irq_set_enabled(DMA_IRQ_0, true);
+    //irq_set_enabled(pio_get_dreq(pio, sm, false), true);
+    
+    pio_sm_set_enabled(pio, sm, true);
+    pio_sm_put_blocking(pio, sm, SAMPLE_COUNT-1);
+}
+
+void teardown_normal_sampler(PIO pio, uint sm, uint dma_channel, uint offset)
+{
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_unclaim(pio, sm);
+    pio_remove_program(pio, &normal_capture_program, offset);
+    dma_channel_abort(dma_channel);
+    dma_channel_unclaim(dma_channel);
 }
 
 void trigger(uint8_t forced)
 {
-    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
-    int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-    capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-    if(!sampler_created)
+    if(forced)
     {
-        sampler_init(&c, sampler_pio, sm, PIN_BASE); 
-        sampler_created = 1;
+        uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
+        int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+        capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+        if(!sampler_created)
+        {
+            auto_sampler_init(&auto_sampler_config, auto_sampler_pio, auto_sampler_sm, PIN_BASE); 
+            sampler_created = 1;
+        }
+        arm_sampler(auto_sampler_pio, auto_sampler_sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, trigger_type, forced);
     }
-    arm_sampler(sampler_pio, sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE, trigger_type, forced);
+    else
+    {
+        uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
+        int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
+        capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+        normal_sampler_offset = pio_add_program(normal_sampler_pio, &normal_capture_program);
+        normal_sampler_init(normal_sampler_pio, normal_sampler_sm, normal_sampler_offset, PIN_BASE, TRIGGER_PIN, sampler_clock_div);
+        arm_normal_sampler(normal_sampler_pio, normal_sampler_sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE);
+    }
 }
 
 static inline uint bits_packed_per_word(uint pin_count) 

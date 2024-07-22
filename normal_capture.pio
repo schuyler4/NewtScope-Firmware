@@ -1,24 +1,34 @@
 .program normal_capture
 pull
-mov x osr
+out x 32
+
+POSITIVE_CAPTURE:
+.wrap_target
+    in pins 4
+    jmp pin NEGATIVE_CAPTURE
+.wrap
 
 NEGATIVE_CAPTURE:
     in pins 8
-    jmp pin POSITIVE_CAPTURE
+    jmp x-- NEGATIVE_CAPTURE
 
-POSITIVE_CAPTURE:
-    in pins 8
-    jmp x-- POSITIVE_CAPTURE
+LOOP_FOREVER:
+    jmp LOOP_FOREVER
 
-    irq 0
+;.program normal_capture
+;.wrap_target
+;    in pins 8
+;.wrap
 
 % c-sdk {
-    static inline void normal_sampler_init(PIO pio, uint sm, uint offset, uint pin_base, uint jump_pin)
+    static inline void normal_sampler_init(PIO pio, uint sm, uint offset, uint pin_base, uint jump_pin, uint clock_div)
     {
-        pio_sm_config config = normal_capture_program_default_config(offset);        
+        pio_sm_config config = normal_capture_program_get_default_config(offset);        
         sm_config_set_in_pins(&config, pin_base);
-        sm_config_set_clkdev(&config, 1);
+        sm_config_set_clkdiv(&config, clock_div);
+        pio_interrupt_clear(pio, 0);
         sm_config_set_in_shift(&config, true, true, FIFO_REGISTER_WIDTH);
         sm_config_set_jmp_pin(&config, jump_pin);
+        pio_sm_init(pio, sm, offset, &config);
     }
-}
+%}
