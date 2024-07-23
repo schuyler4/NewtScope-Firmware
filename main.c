@@ -31,15 +31,28 @@
 static uint8_t trigger_flag = 0;
 static uint8_t sampler_created = 0;
 static uint dma_channel = 0;
+
 PIO auto_sampler_pio = pio0;
-PIO normal_sampler_pio = pio1;
-uint normal_sampler_sm = 0;
+
+PIO negative_sampler_pio = pio0;
+PIO positive_sampler_pio = pio1;
+
+uint negative_sampler_sm = 0;
+uint positive_sampler_sm = 0;
 uint auto_sampler_sm = 0;
+
 pio_sm_config auto_sampler_config;
-pio_sm_config normal_sampler_config;
-uint normal_sampler_offset;
-TriggerType trigger_type = RISING_EDGE;
+pio_sm_config negative_sampler_config;
+pio_sm_config positive_sampler_config;
+
+uint negative_sampler_offset;
+uint positive_sampler_offset;
+
+uint32_t *negative_capture_buffer;
+uint32_t *positive_capture_buffer;
 uint32_t *capture_buffer;
+
+TriggerType trigger_type = RISING_EDGE;
 uint8_t force_trigger = 0;
 uint8_t normal_trigger = 0;
 uint8_t sampler_clock_div = 1;
@@ -264,7 +277,7 @@ void dma_complete_handler(void)
     dma_hw->ints0 = 1 << dma_channel;
     if(normal_trigger) 
     {
-        teardown_normal_sampler(normal_sampler_pio, normal_sampler_sm, dma_channel, normal_sampler_offset);
+        //teardown_normal_sampler(normal_sampler_pio, normal_sampler_sm, dma_channel, normal_sampler_offset);
     }
 }
 
@@ -308,20 +321,35 @@ void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer,
     pio_sm_set_enabled(pio, sm, true);
 }
 
-void arm_normal_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, size_t capture_size_words, uint trigger_pin)
+void arm_normal_sampler(PIO negative_pio, PIO positive_pio, uint positive_sm, uint negative_sm, 
+                        uint negative_dma_channel, uint positive_dma_channel, 
+                        uint32_t *negative_capture_buffer, 
+                        uint32_t *positive_capture_buffer, size_t capture_size_words, uint trigger_pin)
 {
-    pio_sm_set_enabled(pio, sm, false);
-    pio_sm_clear_fifos(pio, sm);
-    pio_sm_restart(pio, sm);
+    pio_sm_set_enabled(negative_pio, negative_sm, false);
+    pio_sm_clear_fifos(negative_pio, negative_sm);
+    pio_sm_restart(negative_pio, negative_sm);
 
-    dma_channel_config c = dma_channel_get_default_config(dma_channel);
-    channel_config_set_read_increment(&c, false);
-    channel_config_set_write_increment(&c, true);
-    channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
-    //channel_config_set_ring(&c, true, 14);
+    pio_sm_set_enabled(positive_pio, positive_sm, false);
+    pio_sm_clear_fifos(positive_pio, positive_sm);
+    pio_sm_restart(positive_pio, positive_sm);
 
-    dma_channel_configure(dma_channel, &c,  capture_buffer, &pio->rxf[sm], capture_size_words, 1);
-    dma_channel_set_irq0_enabled(dma_channel, true);
+    dma_channel_config negative_config = dma_channel_get_default_config(negative_dma_channel);
+    channel_config_set_read_increment(&negative_config, false);
+    channel_config_set_write_increment(&negative_config, true);
+    channel_config_set_dreq(&negative_config, pio_get_dreq(negative_pio, negative_sm, false));
+
+    dma_channel_config positive_config = dma_channel_get_default_config(positive_dma_channel);
+    channel_config_set_read_increment(&positive_config, false);
+    channel_config_set_write_increment(&positive_config, true);
+    channel_config_set_dreq(&positive_config, pio_get_dreq(positive_pio, positive_sm, false));
+
+    dma_channel_configure(negative_dma_channel, &negative_config, negative_capture_buffer, 
+                        &negative_pio->rxf[negative_sm], capture_size_words, 1);
+    dma_channel_configure(positive_dma_channel, &positive_config, positive_capture_buffer, 
+                         &positive_pio->rxf[positive_sm], capture_size_words, 1);
+
+    dma_channel_set_irq0_enabled(positive_dma_channel, true);
 
     //pio_interrupt_clear(pio, 0);
     //pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
@@ -329,17 +357,21 @@ void arm_normal_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_bu
     irq_set_enabled(DMA_IRQ_0, true);
     //irq_set_enabled(pio_get_dreq(pio, sm, false), true);
     
-    pio_sm_set_enabled(pio, sm, true);
-    pio_sm_put_blocking(pio, sm, SAMPLE_COUNT-1);
+    // Enable both the PIOs
+    pio_sm_set_enabled(negative_pio, negative_sm, true);
+    pio_sm_set_enabled(positive_pio, positive_sm, true);
+
+    // Send half the sample buffer length to the negative state machine
+    pio_sm_put_blocking(negative_pio, negative_sm, (SAMPLE_COUNT/2)-1);
 }
 
 void teardown_normal_sampler(PIO pio, uint sm, uint dma_channel, uint offset)
 {
-    pio_sm_set_enabled(pio, sm, false);
-    pio_sm_unclaim(pio, sm);
-    pio_remove_program(pio, &normal_capture_program, offset);
-    dma_channel_abort(dma_channel);
-    dma_channel_unclaim(dma_channel);
+    //pio_sm_set_enabled(pio, sm, false);
+    //pio_sm_unclaim(pio, sm);
+    //pio_remove_program(pio, &normal_capture_program, offset);
+    //dma_channel_abort(dma_channel);
+    //dma_channel_unclaim(dma_channel);
 }
 
 void trigger(uint8_t forced)
@@ -360,10 +392,15 @@ void trigger(uint8_t forced)
     {
         uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
         int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
-        capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
-        normal_sampler_offset = pio_add_program(normal_sampler_pio, &normal_capture_program);
-        normal_sampler_init(normal_sampler_pio, normal_sampler_sm, normal_sampler_offset, PIN_BASE, TRIGGER_PIN, sampler_clock_div);
-        arm_normal_sampler(normal_sampler_pio, normal_sampler_sm, dma_channel, capture_buffer, buffer_size_words, PIN_BASE);
+        negative_capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+        positive_capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+        negative_sampler_offset = pio_add_program(negative_sampler_pio, &normal_capture_program);
+        negative_sampler_init(negative_sampler_pio, negative_sampler_sm, negative_sampler_offset, PIN_BASE, TRIGGER_PIN, sampler_clock_div);
+        positive_sampler_init(positive_sampler_pio, positive_sampler_sm, positive_sampler_offset, PIN_BASE, TRIGGER_PIN, sampler_clock_div);
+        arm_normal_sampler(negative_sampler_pio, positive_sampler_pio, positive_sampler_sm, negative_sampler_sm, 
+                        negative_dma_channel, positive_dma_channel, 
+                        negative_capture_buffer, 
+                        positive_capture_buffer, buffer_size_words, TRIGGER_PIN);
     }
 }
 

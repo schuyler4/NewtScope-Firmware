@@ -1,29 +1,69 @@
-.program normal_capture
-pull
-out x 32
+;.program normal_capture
+;pull
+;out x 32
+;mov y x
 
-POSITIVE_CAPTURE:
-.wrap_target
-    in pins 4
-    jmp pin NEGATIVE_CAPTURE
-.wrap
+;PRE_CAPTURE:
+;    in pins 8
+;    jmp y-- PRE_CAPTURE
 
-NEGATIVE_CAPTURE:
-    in pins 8
-    jmp x-- NEGATIVE_CAPTURE
+;POSITIVE_CAPTURE:
+;.wrap_target
+;    in pins 4
+;    jmp pin NEGATIVE_CAPTURE
+;.wrap
 
-LOOP_FOREVER:
-    jmp LOOP_FOREVER
+;NEGATIVE_CAPTURE:
+;    in pins 8
+;    jmp x-- NEGATIVE_CAPTURE
+
+;LOOP_FOREVER:
+;    jmp LOOP_FOREVER
 
 ;.program normal_capture
 ;.wrap_target
 ;    in pins 8
 ;.wrap
 
+.program negative_capture
+pull
+out x 32
+PRE_CAPTURE:
+    in pins 8
+    jmp x-- PRE_CAPTURE
+
+.wrap_target
+    in pins 8
+    jmp pin LOOP_FOREVER
+.wrap
+
+LOOP_FOREVER:
+    jmp LOOP_FOREVER
+
+.program positive_capture
+.wrap_target 
+    jmp pin SAMPLE
+.wrap
+
+SAMPLE:
+    in pins 8
+    jmp SAMPLE
+
 % c-sdk {
-    static inline void normal_sampler_init(PIO pio, uint sm, uint offset, uint pin_base, uint jump_pin, uint clock_div)
+    static inline void negative_sampler_init(PIO pio, uint sm, uint offset, uint pin_base, uint jump_pin, uint clock_div)
     {
-        pio_sm_config config = normal_capture_program_get_default_config(offset);        
+        pio_sm_config config = negative_capture_program_get_default_config(offset);        
+        sm_config_set_in_pins(&config, pin_base);
+        sm_config_set_clkdiv(&config, clock_div);
+        pio_interrupt_clear(pio, 0);
+        sm_config_set_in_shift(&config, true, true, FIFO_REGISTER_WIDTH);
+        sm_config_set_jmp_pin(&config, jump_pin);
+        pio_sm_init(pio, sm, offset, &config);
+    }
+
+    static inline void positive_sampler_init(PIO pio, uint sm, uint offset, uint pin_base, uint jump_pin, uint clock_div)
+    {
+        pio_sm_config config = positive_capture_program_get_default_config(offset);        
         sm_config_set_in_pins(&config, pin_base);
         sm_config_set_clkdiv(&config, clock_div);
         pio_interrupt_clear(pio, 0);
