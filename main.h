@@ -51,7 +51,9 @@ void arm_normal_sampler(PIO negative_pio, PIO positive_pio, uint positive_sm, ui
 void trigger(uint8_t forced);
 void trigger_callback(uint gpio, uint32_t event_mask);
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
-void teardown_normal_sampler(PIO pio, uint sm, uint dma_channel, uint offset);
+void teardown_normal_sampler(PIO negative_pio, PIO positive_pio, uint negative_sm, uint positive_sm, 
+                             uint negative_dma_channel, uint positive_dma_channel, uint negative_offset, 
+                             uint positive_offset);
 void transmit_vector(uint16_t* vector, uint16_t point_count);
 void get_string(char* str);
 void setup_cal_pin(void);
