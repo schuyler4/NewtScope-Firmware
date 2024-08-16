@@ -29,6 +29,8 @@
 
 #define CHARACTER_TIMEOUT 100
 
+#include <stdint.h>
+
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 
@@ -38,13 +40,23 @@ typedef enum
     RISING_EDGE
 } TriggerType;
 
+typedef struct
+{
+    uint8_t created;
+    uint dma_channel;
+    PIO pio;
+    uint sm;
+    pio_sm_config *c;
+    uint32_t* capture_buffer;
+} Sampler;
+
 void setup_IO(void);
 void setup_SPI(void);
-uint8_t sampler_init(pio_sm_config* c, PIO pio, uint8_t sm, uint8_t pin_base);
-void arm_sampler(PIO pio, uint sm, uint dma_channel, uint32_t *capture_buffer, 
-                 size_t capture_size_words, uint trigger_pin, bool trigger_level, 
-                 uint8_t force_trigger);
-void trigger(uint8_t forced);
+void sampler_init(Sampler* sampler, uint8_t sampler_number, PIO pio_module);
+void update_clock(Sampler my_sampler);
+uint8_t sampler_pio_init(Sampler sampler, uint8_t pin_base);
+void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, bool trigger_level, uint8_t force_trigger);
+void trigger(Sampler* sampler, uint8_t forced);
 void trigger_callback(uint gpio, uint32_t event_mask);
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
 void transmit_vector(uint16_t* vector, uint16_t point_count);
