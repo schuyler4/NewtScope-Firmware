@@ -1,6 +1,8 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+#define WORD_SIZE 32
+
 #define TRIGGER_PIN_COUNT 9
 #define FORCE_TRIGGER_PIN_COUNT 8
 #define FIFO_REGISTER_WIDTH 32

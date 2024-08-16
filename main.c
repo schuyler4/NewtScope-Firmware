@@ -308,30 +308,20 @@ void trigger(Sampler *sampler, uint8_t forced)
     arm_sampler(*sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
 }
 
-static inline uint bits_packed_per_word(uint pin_count) 
-{
-    const uint SHIFT_REG_WIDTH = 32;
-    return SHIFT_REG_WIDTH - (SHIFT_REG_WIDTH % pin_count);
-}
-  
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger)
 {
-    uint record_size_bits = bits_packed_per_word(FORCE_TRIGGER_PIN_COUNT);
     char samples[SAMPLE_COUNT];
     uint32_t j;
-    for(j = 0; j < SAMPLE_COUNT; j++)
-    {
-        samples[j] = 0; 
-    }
+    for(j = 0; j < SAMPLE_COUNT; j++) samples[j] = 0; 
     for(j = 0; j < FORCE_TRIGGER_PIN_COUNT; j++)
     {
         uint32_t i;
         for(i = 0; i < sample_buffer_length; i++)
         {
             uint bit_index = j + i * FORCE_TRIGGER_PIN_COUNT;
-            uint word_index = bit_index / record_size_bits;
-            uint word_mask = 1u << (bit_index % record_size_bits + 32 - record_size_bits);
-            uint8_t bit = sample_buffer[word_index] & word_mask ? 1 : 0;
+            uint byte_index = bit_index / WORD_SIZE;
+            uint byte_mask = 1 << bit_index % WORD_SIZE;
+            uint bit = (sample_buffer[byte_index] & byte_mask) != 0;
             samples[i] |= (bit << j);
         } 
     }
