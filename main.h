@@ -50,15 +50,16 @@ typedef struct
     uint sm;
     pio_sm_config *c;
     uint32_t* capture_buffer;
+    uint offset;
 } Sampler;
 
 void setup_IO(void);
 void setup_SPI(void);
 void sampler_init(Sampler* sampler, uint8_t sampler_number, PIO pio_module);
-void update_clock(Sampler my_sampler);
+void update_clock(Sampler sampler);
 uint8_t sampler_pio_init(Sampler sampler, uint8_t pin_base);
 void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, bool trigger_level, uint8_t force_trigger);
-void trigger(Sampler* sampler, uint8_t forced);
+void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced);
 void trigger_callback(uint gpio, uint32_t event_mask);
 void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
 void transmit_vector(uint16_t* vector, uint16_t point_count);

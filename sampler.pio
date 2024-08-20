@@ -1,0 +1,34 @@
+.program force_trigger
+in pins 8
+
+.program normal_trigger_positive
+PRE_SAMPLE:
+    jmp pin SAMPLE
+    jmp PRE_SAMPLE
+SAMPLE:
+    .wrap_target
+    in pins 8
+    .wrap
+
+% c-sdk {
+    static inline void force_trigger_sampler_init(PIO pio, pio_sm_config* config_ptr, uint sm, uint offset, uint pin_base)
+    {
+        *config_ptr = force_trigger_program_get_default_config(offset);
+        sm_config_set_in_pins(config_ptr, pin_base);
+        sm_config_set_clkdiv(config_ptr, 2);
+        pio_interrupt_clear(pio, 0);
+        sm_config_set_in_shift(config_ptr, true, true, FIFO_REGISTER_WIDTH);
+        pio_sm_init(pio, sm, offset, config_ptr);
+    }
+
+    static inline void normal_trigger_sampler_init(PIO pio, pio_sm_config* config_ptr, uint sm, uint offset, uint pin_base, uint jmp_pin)
+    {
+        *config_ptr = normal_trigger_positive_program_get_default_config(offset);
+        sm_config_set_in_pins(config_ptr, pin_base);
+        sm_config_set_clkdiv(config_ptr, 2);
+        sm_config_set_jmp_pin(config_ptr, jmp_pin);
+        pio_interrupt_clear(pio, 0);
+        sm_config_set_in_shift(config_ptr, true, true, FIFO_REGISTER_WIDTH);
+        pio_sm_init(pio, sm, offset, config_ptr);
+    }
+%}
