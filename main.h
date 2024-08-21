@@ -51,6 +51,7 @@ typedef struct
     pio_sm_config *c;
     uint32_t* capture_buffer;
     uint offset;
+    uint clock_div;
 } Sampler;
 
 void setup_IO(void);

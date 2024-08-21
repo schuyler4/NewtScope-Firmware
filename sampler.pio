@@ -1,34 +1,37 @@
 .program force_trigger
-in pins 8
+SAMPLE:
+    in pins 8
+    jmp SAMPLE
 
 .program normal_trigger_positive
 PRE_SAMPLE:
     jmp pin SAMPLE
     jmp PRE_SAMPLE
 SAMPLE:
-    .wrap_target
     in pins 8
-    .wrap
+    jmp SAMPLE
 
 % c-sdk {
-    static inline void force_trigger_sampler_init(PIO pio, pio_sm_config* config_ptr, uint sm, uint offset, uint pin_base)
+    #include "../main.h"
+
+    static inline void force_trigger_sampler_init(Sampler sampler, uint pin_base, uint clk_div)
     {
-        *config_ptr = force_trigger_program_get_default_config(offset);
-        sm_config_set_in_pins(config_ptr, pin_base);
-        sm_config_set_clkdiv(config_ptr, 2);
-        pio_interrupt_clear(pio, 0);
-        sm_config_set_in_shift(config_ptr, true, true, FIFO_REGISTER_WIDTH);
-        pio_sm_init(pio, sm, offset, config_ptr);
+        *(sampler.c) = force_trigger_program_get_default_config(sampler.offset);
+        sm_config_set_in_pins(sampler.c, pin_base);
+        sm_config_set_clkdiv(sampler.c, clk_div);
+        pio_interrupt_clear(sampler.pio, 0);
+        sm_config_set_in_shift(sampler.c, true, true, FIFO_REGISTER_WIDTH);
+        pio_sm_init(sampler.pio, sampler.sm, sampler.offset, sampler.c);
     }
 
-    static inline void normal_trigger_sampler_init(PIO pio, pio_sm_config* config_ptr, uint sm, uint offset, uint pin_base, uint jmp_pin)
+    static inline void normal_trigger_sampler_init(Sampler sampler, uint pin_base, uint jmp_pin, uint clk_div)
     {
-        *config_ptr = normal_trigger_positive_program_get_default_config(offset);
-        sm_config_set_in_pins(config_ptr, pin_base);
-        sm_config_set_clkdiv(config_ptr, 2);
-        sm_config_set_jmp_pin(config_ptr, jmp_pin);
-        pio_interrupt_clear(pio, 0);
-        sm_config_set_in_shift(config_ptr, true, true, FIFO_REGISTER_WIDTH);
-        pio_sm_init(pio, sm, offset, config_ptr);
+        *(sampler.c) = normal_trigger_positive_program_get_default_config(sampler.offset);
+        sm_config_set_in_pins(sampler.c, pin_base);
+        sm_config_set_clkdiv(sampler.c, clk_div);
+        sm_config_set_jmp_pin(sampler.c, jmp_pin);
+        pio_interrupt_clear(sampler.pio, 0);
+        sm_config_set_in_shift(sampler.c, true, true, FIFO_REGISTER_WIDTH);
+        pio_sm_init(sampler.pio, sampler.sm, sampler.offset, sampler.c);
     }
 %}

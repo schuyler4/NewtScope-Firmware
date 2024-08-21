@@ -37,6 +37,8 @@ static volatile uint8_t trigger_vector_available = 0;
 static Sampler normal_sampler;
 static Sampler force_sampler;
 
+uint clk_div;
+
 int main(void)
 {
     stdio_init_all();
@@ -50,6 +52,7 @@ int main(void)
 
     sampler_init(&normal_sampler, 0, pio0);
     sampler_init(&force_sampler, 0, pio0);
+    clk_div = 1;
 
     while(1)
     {
@@ -59,11 +62,17 @@ int main(void)
             {
                 print_samples(force_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
                 free(force_sampler.capture_buffer);
+                pio_sm_set_enabled(force_sampler.pio, force_sampler.sm, false);
+                pio_remove_program(force_sampler.pio, &force_trigger_program, force_sampler.offset);
+                force_sampler.created = 0;
             }
             else
             {
                 print_samples(normal_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
                 free(normal_sampler.capture_buffer);
+                pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
+                pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
+                normal_sampler.created = 0;
             }
             trigger_vector_available = 0;
         }
@@ -257,25 +266,6 @@ void dma_complete_handler(void)
         dma_hw->ints0 = 1 << normal_sampler.dma_channel;
 }
 
-uint8_t ampler_pio_init(Sampler sampler, uint8_t pin_base)
-{
-    uint16_t sampling_instructions = pio_encode_in(pio_pins, FORCE_TRIGGER_PIN_COUNT);
-    struct pio_program sample_prog = {
-        .instructions = &sampling_instructions, 
-        .length = 1, 
-        .origin = -1
-    };
-
-    uint8_t offset = pio_add_program(sampler.pio, &sample_prog);
-    sm_config_set_in_pins(sampler.c, pin_base);
-    sm_config_set_wrap(sampler.c, offset, offset);
-    sm_config_set_clkdiv(sampler.c, 2);
-    sm_config_set_in_shift(sampler.c, true, true, FIFO_REGISTER_WIDTH);
-    sm_config_set_fifo_join(sampler.c, PIO_FIFO_JOIN_RX);
-    pio_sm_init(sampler.pio, sampler.sm, offset, sampler.c);
-    return offset;
-}
-
 void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, bool trigger_level, uint8_t force_trigger)
 {
     pio_sm_set_enabled(sampler.pio, sampler.sm, false);
@@ -299,11 +289,10 @@ void update_clock(Sampler sampler)
 {
     char code_string[MAX_STRING_LENGTH];
     get_string(code_string);
-    uint16_t clock_div = atoi(code_string);   
-    if(clock_div > 0)
+    uint16_t commanded_clock_div = atoi(code_string);   
+    if(commanded_clock_div > 0)
     {
-        sm_config_set_clkdiv(sampler.c, clock_div*2);
-        pio_sm_set_config(sampler.pio, sampler.sm, sampler.c);
+        clk_div = commanded_clock_div;
     }
 }
 
@@ -317,10 +306,10 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         if(!force_sampler->created)
         {
             force_sampler->offset = pio_add_program(force_sampler->pio, &force_trigger_program);
-            force_trigger_sampler_init(force_sampler->pio, force_sampler->c, force_sampler->sm, force_sampler->offset, PIN_BASE);
+            force_trigger_sampler_init(*force_sampler, PIN_BASE, clk_div);
             force_sampler->created = 1;
+            arm_sampler(*force_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
         }
-        arm_sampler(*force_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
     }
     else
     {
@@ -328,12 +317,10 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         if(!normal_sampler->created)
         {
             normal_sampler->offset = pio_add_program(force_sampler->pio, &normal_trigger_positive_program);
-            normal_trigger_sampler_init(normal_sampler->pio, normal_sampler->c, 
-                                        normal_sampler->sm, 
-                                        normal_sampler->offset, PIN_BASE, TRIGGER_PIN);
+            normal_trigger_sampler_init(*normal_sampler, PIN_BASE, TRIGGER_PIN, clk_div);
             normal_sampler->created = 1;
+            arm_sampler(*normal_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
         }
-        arm_sampler(*normal_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
     }
 }
 
