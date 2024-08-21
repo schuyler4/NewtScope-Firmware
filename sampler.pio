@@ -1,6 +1,7 @@
 .program force_trigger
 SAMPLE:
     in pins 8
+    irq set 0
     jmp SAMPLE
 
 .program normal_trigger_positive
@@ -8,6 +9,7 @@ PRE_SAMPLE:
     jmp pin SAMPLE
     jmp PRE_SAMPLE
 SAMPLE:
+    irq set 0
     in pins 8
     jmp SAMPLE
 
@@ -19,7 +21,6 @@ SAMPLE:
         *(sampler.c) = force_trigger_program_get_default_config(sampler.offset);
         sm_config_set_in_pins(sampler.c, pin_base);
         sm_config_set_clkdiv(sampler.c, clk_div);
-        pio_interrupt_clear(sampler.pio, 0);
         sm_config_set_in_shift(sampler.c, true, true, FIFO_REGISTER_WIDTH);
         pio_sm_init(sampler.pio, sampler.sm, sampler.offset, sampler.c);
     }
@@ -30,7 +31,6 @@ SAMPLE:
         sm_config_set_in_pins(sampler.c, pin_base);
         sm_config_set_clkdiv(sampler.c, clk_div);
         sm_config_set_jmp_pin(sampler.c, jmp_pin);
-        pio_interrupt_clear(sampler.pio, 0);
         sm_config_set_in_shift(sampler.c, true, true, FIFO_REGISTER_WIDTH);
         pio_sm_init(sampler.pio, sampler.sm, sampler.offset, sampler.c);
     }

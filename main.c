@@ -275,12 +275,15 @@ void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, b
     dma_channel_config c = dma_channel_get_default_config(sampler.dma_channel);
     channel_config_set_read_increment(&c, false);
     channel_config_set_write_increment(&c, true);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
+    //channel_config_set_ring(&c, true, 14);
 
     dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], capture_size_words, 1);
-    dma_channel_set_irq0_enabled(sampler.dma_channel, true);
-    irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
-    irq_set_enabled(DMA_IRQ_0, true);
+    //dma_channel_set_irq0_enabled(sampler.dma_channel, true);
+    //irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
+    //irq_set_enabled(DMA_IRQ_0, true);
+    
     
     pio_sm_set_enabled(sampler.pio, sampler.sm, true);
 }
@@ -305,6 +308,9 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         force_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
         if(!force_sampler->created)
         {
+            pio_set_irq0_source_enabled(force_sampler->pio, pis_interrupt0, true);
+            irq_set_exclusive_handler(PIO0_IRQ_0, dma_complete_handler);
+            irq_set_enabled(PIO0_IRQ_0, true);
             force_sampler->offset = pio_add_program(force_sampler->pio, &force_trigger_program);
             force_trigger_sampler_init(*force_sampler, PIN_BASE, clk_div);
             force_sampler->created = 1;
@@ -316,6 +322,9 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         normal_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
         if(!normal_sampler->created)
         {
+            pio_set_irq0_source_enabled(normal_sampler->pio, pis_interrupt0, true);
+            irq_set_exclusive_handler(PIO0_IRQ_0, dma_complete_handler);
+            irq_set_enabled(PIO0_IRQ_0, true);
             normal_sampler->offset = pio_add_program(force_sampler->pio, &normal_trigger_positive_program);
             normal_trigger_sampler_init(*normal_sampler, PIN_BASE, TRIGGER_PIN, clk_div);
             normal_sampler->created = 1;

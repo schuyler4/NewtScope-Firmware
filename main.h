@@ -46,6 +46,7 @@ typedef struct
 {
     uint8_t created;
     uint dma_channel;
+    uint ring_dma_channel;
     PIO pio;
     uint sm;
     pio_sm_config *c;
