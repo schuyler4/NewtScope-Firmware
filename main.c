@@ -62,9 +62,9 @@ int main(void)
             {
                 print_samples(force_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
                 free(force_sampler.capture_buffer);
-                pio_sm_set_enabled(force_sampler.pio, force_sampler.sm, false);
-                pio_remove_program(force_sampler.pio, &force_trigger_program, force_sampler.offset);
-                force_sampler.created = 0;
+                //pio_sm_set_enabled(force_sampler.pio, force_sampler.sm, false);
+                //pio_remove_program(force_sampler.pio, &force_trigger_program, force_sampler.offset);
+                //force_sampler.created = 0;
             }
             else
             {
@@ -308,8 +308,8 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
             force_sampler->offset = pio_add_program(force_sampler->pio, &force_trigger_program);
             force_trigger_sampler_init(*force_sampler, PIN_BASE, clk_div);
             force_sampler->created = 1;
-            arm_sampler(*force_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
         }
+        arm_sampler(*force_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
     }
     else
     {
@@ -319,8 +319,8 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
             normal_sampler->offset = pio_add_program(force_sampler->pio, &normal_trigger_positive_program);
             normal_trigger_sampler_init(*normal_sampler, PIN_BASE, TRIGGER_PIN, clk_div);
             normal_sampler->created = 1;
-            arm_sampler(*normal_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
         }
+        arm_sampler(*normal_sampler, buffer_size_words, PIN_BASE, trigger_type, forced);
     }
 }
 
