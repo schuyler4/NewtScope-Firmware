@@ -62,9 +62,6 @@ int main(void)
             {
                 print_samples(force_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
                 free(force_sampler.capture_buffer);
-                //pio_sm_set_enabled(force_sampler.pio, force_sampler.sm, false);
-                //pio_remove_program(force_sampler.pio, &force_trigger_program, force_sampler.offset);
-                //force_sampler.created = 0;
             }
             else
             {
@@ -118,10 +115,7 @@ int main(void)
                     break;
                 }
             case CLOCK_DIV_COMMAND:
-                if(force_trigger)
-                    update_clock(force_sampler);
-                else
-                    update_clock(normal_sampler);
+                update_clock(force_sampler, normal_sampler); 
                 break;
             case STOP_COMMAND:
                 {
@@ -285,7 +279,7 @@ void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, b
     pio_sm_set_enabled(sampler.pio, sampler.sm, true);
 }
 
-void update_clock(Sampler sampler)
+void update_clock(Sampler force_sampler, Sampler normal_sampler)
 {
     char code_string[MAX_STRING_LENGTH];
     get_string(code_string);
@@ -293,6 +287,16 @@ void update_clock(Sampler sampler)
     if(commanded_clock_div > 0)
     {
         clk_div = commanded_clock_div;
+        if(force_sampler.created)
+        {
+            sm_config_set_clkdiv(force_sampler.c, clk_div);
+            pio_sm_set_config(force_sampler.pio, force_sampler.sm, force_sampler.c);
+        }
+        if(normal_sampler.created)
+        {
+            sm_config_set_clkdiv(normal_sampler.c, clk_div);
+            pio_sm_set_config(normal_sampler.pio, normal_sampler.sm, normal_sampler.c);
+        }
     }
 }
 
@@ -302,6 +306,12 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
     int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
     if(forced)
     {
+        if(normal_sampler->created)
+        {
+            pio_sm_set_enabled(normal_sampler->pio, normal_sampler->sm, false);
+            pio_remove_program(normal_sampler->pio, &normal_trigger_positive_program, normal_sampler->offset);
+            normal_sampler->created = 0;
+        }
         force_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
         if(!force_sampler->created)
         {
@@ -313,6 +323,12 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
     }
     else
     {
+        if(force_sampler->created)
+        {
+            pio_sm_set_enabled(force_sampler->pio, force_sampler->sm, false);
+            pio_remove_program(force_sampler->pio, &force_trigger_program, force_sampler->offset);
+            force_sampler->created = 0;
+        }
         normal_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
         if(!normal_sampler->created)
         {
