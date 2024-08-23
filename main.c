@@ -253,11 +253,18 @@ void setup_cal_pin(void)
 
 void dma_complete_handler(void)
 {
-    trigger_vector_available = 1; 
     if(force_trigger)
+    {
         dma_hw->ints0 = 1 << force_sampler.dma_channel;
+        pio_interrupt_clear(force_sampler.pio, 0);  
+    }
     else
+    {
         dma_hw->ints0 = 1 << normal_sampler.dma_channel;
+        pio_interrupt_clear(normal_sampler.pio, 0);  
+    }
+    irq_clear(PIO0_IRQ_0);
+    trigger_vector_available = 1; 
 }
 
 void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, bool trigger_level, uint8_t force_trigger)
@@ -271,13 +278,13 @@ void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, b
     channel_config_set_write_increment(&c, true);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
-    //channel_config_set_ring(&c, true, 14);
+    if(!force_trigger)
+        channel_config_set_ring(&c, true, 15);
 
     dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], capture_size_words, 1);
     //dma_channel_set_irq0_enabled(sampler.dma_channel, true);
     //irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
     //irq_set_enabled(DMA_IRQ_0, true);
-    
     
     pio_sm_set_enabled(sampler.pio, sampler.sm, true);
 }
