@@ -5,13 +5,18 @@ SAMPLE:
     jmp SAMPLE
 
 .program normal_trigger_positive
-PRE_SAMPLE:
-    jmp pin SAMPLE
-    jmp PRE_SAMPLE
-SAMPLE:
-    irq set 0
+pull
+out x 32
+mov y x
+NEGATIVE_CAPTURE:
+    jmp pin POSITIVE_CAPTURE
+    jmp NEGATIVE_CAPTURE
+POSITIVE_CAPTURE:
     in pins 8
-    jmp SAMPLE
+    jmp x-- POSITIVE_CAPTURE
+    irq set 0
+LOOP_FOREVER:
+    jmp LOOP_FOREVER
 
 % c-sdk {
     #include "../main.h"

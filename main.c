@@ -37,6 +37,8 @@ static volatile uint8_t trigger_vector_available = 0;
 static Sampler normal_sampler;
 static Sampler force_sampler;
 
+//static uint32_t
+
 uint clk_div;
 
 int main(void)
@@ -190,20 +192,15 @@ void reset_triggers(void)
 {
     trigger_vector_available = 0;
     trigger_flag = 0;
-    if(force_trigger)
-        dma_hw->ints0 = 1 << force_sampler.dma_channel;
-    else
-        dma_hw->ints0 = 1 << normal_sampler.dma_channel;
+    if(force_trigger) dma_hw->ints0 = 1 << force_sampler.dma_channel;
+    else dma_hw->ints0 = 1 << normal_sampler.dma_channel;
 }
 
 void run_trigger(void)
 {
     force_trigger = 0;
-    if(!gpio_get(TRIGGER_PIN))
-        trigger(&force_sampler, &normal_sampler, force_trigger);
-    else
-        if(!trigger_flag) 
-            trigger_flag = 1;
+    if(!gpio_get(TRIGGER_PIN)) trigger(&force_sampler, &normal_sampler, force_trigger);
+    else if(!trigger_flag) trigger_flag = 1;
 }
 
 void get_string(char* str)
@@ -279,14 +276,20 @@ void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, b
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
     if(!force_trigger)
+    {
         channel_config_set_ring(&c, true, 15);
+    }
 
     dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], capture_size_words, 1);
-    //dma_channel_set_irq0_enabled(sampler.dma_channel, true);
-    //irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
-    //irq_set_enabled(DMA_IRQ_0, true);
+    if(force_trigger)
+    {
+        dma_channel_set_irq0_enabled(sampler.dma_channel, true);
+        irq_set_exclusive_handler(DMA_IRQ_0, dma_complete_handler);
+        irq_set_enabled(DMA_IRQ_0, true);
+    }
     
     pio_sm_set_enabled(sampler.pio, sampler.sm, true);
+    if(!force_trigger) pio_sm_put_blocking(sampler.pio, sampler.sm, (SAMPLE_COUNT/2)-1);
 }
 
 void update_clock(Sampler force_sampler, Sampler normal_sampler)
@@ -325,9 +328,6 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         force_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
         if(!force_sampler->created)
         {
-            pio_set_irq0_source_enabled(force_sampler->pio, pis_interrupt0, true);
-            irq_set_exclusive_handler(PIO0_IRQ_0, dma_complete_handler);
-            irq_set_enabled(PIO0_IRQ_0, true);
             force_sampler->offset = pio_add_program(force_sampler->pio, &force_trigger_program);
             force_trigger_sampler_init(*force_sampler, PIN_BASE, clk_div);
             force_sampler->created = 1;
@@ -345,6 +345,7 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         normal_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
         if(!normal_sampler->created)
         {
+            // Set up the PIO based interrupt.
             pio_set_irq0_source_enabled(normal_sampler->pio, pis_interrupt0, true);
             irq_set_exclusive_handler(PIO0_IRQ_0, dma_complete_handler);
             irq_set_enabled(PIO0_IRQ_0, true);
