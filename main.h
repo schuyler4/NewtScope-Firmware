@@ -62,7 +62,6 @@ uint8_t sampler_pio_init(Sampler sampler, uint8_t pin_base);
 void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t force_trigger);
 void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced);
 void trigger_callback(uint gpio, uint32_t event_mask);
-void print_samples(uint8_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
 void transmit_vector(uint16_t* vector, uint16_t point_count);
 void get_string(char* str);
 void setup_cal_pin(void);

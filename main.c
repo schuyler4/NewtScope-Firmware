@@ -60,12 +60,12 @@ int main(void)
         {
             if(force_trigger)
             {
-                print_samples(force_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
+                write(1, (char*)force_sampler.capture_buffer, SAMPLE_COUNT*sizeof(char));
                 free(force_sampler.capture_buffer);
             }
             else
             {
-                print_samples(normal_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
+                write(1, (char*)normal_sampler.capture_buffer, SAMPLE_COUNT*sizeof(char));
                 free(normal_sampler.capture_buffer);
                 pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
                 pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
@@ -339,24 +339,4 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         }
         arm_sampler(*normal_sampler, PIN_BASE, trigger_type, forced);
     }
-}
-
-void print_samples(uint8_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger)
-{
-    char samples[SAMPLE_COUNT];
-    uint32_t j;
-    for(j = 0; j < SAMPLE_COUNT; j++) samples[j] = 0; 
-    for(j = 0; j < FORCE_TRIGGER_PIN_COUNT; j++)
-    {
-        uint32_t i;
-        for(i = 0; i < sample_buffer_length; i++)
-        {
-            uint bit_index = j + i * FORCE_TRIGGER_PIN_COUNT;
-            uint byte_index = bit_index / WORD_SIZE;
-            uint byte_mask = 1 << bit_index % WORD_SIZE;
-            uint bit = (sample_buffer[byte_index] & byte_mask) != 0;
-            samples[i] |= (bit << j);
-        } 
-    }
-    write(1, (char*)sample_buffer, sizeof(sample_buffer));
 }
