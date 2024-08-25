@@ -7,7 +7,7 @@
 #define FORCE_TRIGGER_PIN_COUNT 8
 #define FIFO_REGISTER_WIDTH 32
 #define PIN_BASE 0
-#define SAMPLE_COUNT 20000
+#define SAMPLE_COUNT 8192
 
 #define CLOCK_PIN 21
 #define PS_SET_PIN 23
@@ -31,6 +31,8 @@
 
 #define CHARACTER_TIMEOUT 100
 
+#define BUFFER_SIZE (SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT)/FIFO_REGISTER_WIDTH
+
 #include <stdint.h>
 
 #include "pico/stdlib.h"
@@ -50,7 +52,7 @@ typedef struct
     PIO pio;
     uint sm;
     pio_sm_config *c;
-    uint32_t* capture_buffer;
+    uint8_t* capture_buffer;
     uint offset;
     uint clock_div;
 } Sampler;
@@ -63,7 +65,7 @@ uint8_t sampler_pio_init(Sampler sampler, uint8_t pin_base);
 void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, bool trigger_level, uint8_t force_trigger);
 void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced);
 void trigger_callback(uint gpio, uint32_t event_mask);
-void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
+void print_samples(uint8_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger);
 void transmit_vector(uint16_t* vector, uint16_t point_count);
 void get_string(char* str);
 void setup_cal_pin(void);

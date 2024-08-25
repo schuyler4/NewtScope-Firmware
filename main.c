@@ -37,7 +37,7 @@ static volatile uint8_t trigger_vector_available = 0;
 static Sampler normal_sampler;
 static Sampler force_sampler;
 
-//static uint32_t
+static uint8_t aligned_memory[BUFFER_SIZE*sizeof(uint32_t)] __attribute__((aligned(32768)));
 
 uint clk_div;
 
@@ -68,7 +68,7 @@ int main(void)
             else
             {
                 print_samples(normal_sampler.capture_buffer, SAMPLE_COUNT, force_trigger);
-                free(normal_sampler.capture_buffer);
+                //free(normal_sampler.capture_buffer);
                 pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
                 pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
                 normal_sampler.created = 0;
@@ -253,12 +253,20 @@ void dma_complete_handler(void)
     if(force_trigger)
     {
         dma_hw->ints0 = 1 << force_sampler.dma_channel;
-        pio_interrupt_clear(force_sampler.pio, 0);  
+        //dma_channel_abort(force_sampler.dma_channel);
+        //dma_channel_unclaim(force_sampler.dma_channel);
     }
     else
     {
-        dma_hw->ints0 = 1 << normal_sampler.dma_channel;
+        //dma_channel_abort(normal_sampler.dma_channel);
+        //dma_channel_unclaim(normal_sampler.dma_channel);
         pio_interrupt_clear(normal_sampler.pio, 0);  
+        irq_set_enabled(PIO0_IRQ_0, false);
+        irq_set_enabled(pio_get_dreq(normal_sampler.pio, normal_sampler.sm, false), false);
+        irq_remove_handler(PIO0_IRQ_0, dma_complete_handler);
+        //pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
+        //pio_sm_unclaim(normal_sampler.pio, normal_sampler.sm);
+        //pio_remove_program(normal_sampler.pio, )
     }
     irq_clear(PIO0_IRQ_0);
     trigger_vector_available = 1; 
@@ -275,12 +283,9 @@ void arm_sampler(Sampler sampler, size_t capture_size_words, uint trigger_pin, b
     channel_config_set_write_increment(&c, true);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
-    if(!force_trigger)
-    {
-        channel_config_set_ring(&c, true, 15);
-    }
+    if(!force_trigger) channel_config_set_ring(&c, true, 15);
 
-    dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], capture_size_words, 1);
+    dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/4, 1);
     if(force_trigger)
     {
         dma_channel_set_irq0_enabled(sampler.dma_channel, true);
@@ -325,7 +330,7 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
             pio_remove_program(normal_sampler->pio, &normal_trigger_positive_program, normal_sampler->offset);
             normal_sampler->created = 0;
         }
-        force_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+        force_sampler->capture_buffer = malloc(SAMPLE_COUNT*sizeof(uint8_t));
         if(!force_sampler->created)
         {
             force_sampler->offset = pio_add_program(force_sampler->pio, &force_trigger_program);
@@ -342,7 +347,7 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
             pio_remove_program(force_sampler->pio, &force_trigger_program, force_sampler->offset);
             force_sampler->created = 0;
         }
-        normal_sampler->capture_buffer = malloc(buffer_size_words*sizeof(uint32_t));
+        normal_sampler->capture_buffer = aligned_memory; 
         if(!normal_sampler->created)
         {
             // Set up the PIO based interrupt.
@@ -357,9 +362,10 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
     }
 }
 
-void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger)
+void print_samples(uint8_t* sample_buffer, uint sample_buffer_length, uint8_t force_trigger)
 {
     char samples[SAMPLE_COUNT];
+    /*
     uint32_t j;
     for(j = 0; j < SAMPLE_COUNT; j++) samples[j] = 0; 
     for(j = 0; j < FORCE_TRIGGER_PIN_COUNT; j++)
@@ -374,5 +380,14 @@ void print_samples(uint32_t* sample_buffer, uint sample_buffer_length, uint8_t f
             samples[i] |= (bit << j);
         } 
     }
-    write(1, samples, sizeof(samples));
+    */
+    /*
+    uint32_t j;
+    for(j = 0; j < SAMPLE_COUNT; j++)
+    {
+        samples[j] = sample_buffer[j];
+    }
+    */
+
+    write(1, (char*)sample_buffer, sizeof(samples));
 }

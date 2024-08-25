@@ -1,16 +1,16 @@
 .program force_trigger
 SAMPLE:
     in pins 8
-    irq set 0
     jmp SAMPLE
 
 .program normal_trigger_positive
 pull
 out x 32
 mov y x
-NEGATIVE_CAPTURE:
+.wrap_target
+    in pins 8
     jmp pin POSITIVE_CAPTURE
-    jmp NEGATIVE_CAPTURE
+.wrap
 POSITIVE_CAPTURE:
     in pins 8
     jmp x-- POSITIVE_CAPTURE
@@ -26,7 +26,7 @@ LOOP_FOREVER:
         *(sampler.c) = force_trigger_program_get_default_config(sampler.offset);
         sm_config_set_in_pins(sampler.c, pin_base);
         sm_config_set_clkdiv(sampler.c, clk_div);
-        sm_config_set_in_shift(sampler.c, true, true, FIFO_REGISTER_WIDTH);
+        sm_config_set_in_shift(sampler.c, false, true, FIFO_REGISTER_WIDTH);
         pio_sm_init(sampler.pio, sampler.sm, sampler.offset, sampler.c);
     }
 
