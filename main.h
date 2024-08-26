@@ -31,8 +31,6 @@
 
 #define CHARACTER_TIMEOUT 100
 
-#define BUFFER_SIZE (SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT)/FIFO_REGISTER_WIDTH
-
 #include <stdint.h>
 
 #include "pico/stdlib.h"
@@ -52,7 +50,6 @@ typedef struct
     PIO pio;
     uint sm;
     pio_sm_config *c;
-    uint8_t* capture_buffer;
     uint8_t* capture_buffer;
     uint offset;
     uint clock_div;
