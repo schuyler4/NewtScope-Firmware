@@ -23,6 +23,7 @@
 #include "serial_protocol.h"
 #include "calibration_memory.h"
 #include "mcp41010.h"
+#include "ring_buffer.h"
 
 #include "sampler.pio.h"
 
@@ -67,8 +68,8 @@ int main(void)
             }
             else
             {
+                flatten_ring_buffer(normal_sampler.capture_buffer, get_dma_last_index(normal_sampler), SAMPLE_COUNT);
                 write(1, (char*)normal_sampler.capture_buffer, SAMPLE_COUNT*sizeof(char));
-                //free(normal_sampler.capture_buffer);
                 //pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
                 //pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
                 normal_sampler.created = 0;
@@ -265,6 +266,8 @@ void dma_complete_handler(void)
         //pio_sm_unclaim(normal_sampler.pio, normal_sampler.sm);
         //dma_channel_abort(normal_sampler.dma_channel);
         //dma_channel_unclaim(normal_sampler.dma_channel);
+        //dma_channel_abort(1);
+        //dma_channel_unclaim(1);
         irq_set_enabled(PIO0_IRQ_0, false);
         irq_remove_handler(PIO0_IRQ_0, dma_complete_handler);
         normal_sampler.created = 0;
@@ -316,6 +319,12 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
     if(!force_trigger) pio_sm_put_blocking(sampler.pio, sampler.sm, (SAMPLE_COUNT/2)-1);
 }
 
+uint16_t get_dma_last_index(Sampler normal_sampler)
+{
+    if(dma_channel_is_busy(normal_sampler.dma_channel)) return dma_channel_hw_addr(normal_sampler.dma_channel)->transfer_count - 1;
+    else return dma_channel_hw_addr(1)->transfer_count - 1 + 4096;
+}
+
 void update_clock(Sampler force_sampler, Sampler normal_sampler)
 {
     char code_string[MAX_STRING_LENGTH];
@@ -329,18 +338,11 @@ void update_clock(Sampler force_sampler, Sampler normal_sampler)
             sm_config_set_clkdiv(force_sampler.c, clk_div);
             pio_sm_set_config(force_sampler.pio, force_sampler.sm, force_sampler.c);
         }
-        if(normal_sampler.created)
-        {
-            sm_config_set_clkdiv(normal_sampler.c, clk_div);
-            pio_sm_set_config(normal_sampler.pio, normal_sampler.sm, normal_sampler.c);
-        }
     }
 }
 
 void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
 {
-    uint total_sample_bits = SAMPLE_COUNT*FORCE_TRIGGER_PIN_COUNT;
-    int buffer_size_words = total_sample_bits/FIFO_REGISTER_WIDTH;
     if(forced)
     {
         if(normal_sampler->created)
