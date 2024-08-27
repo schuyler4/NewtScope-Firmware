@@ -6,6 +6,11 @@ SAMPLE:
 .program normal_trigger_positive
 pull
 out x 32
+pull
+out y 32
+PRE_CAPTURE:
+    in pins 8
+    jmp y-- PRE_CAPTURE
 .wrap_target
     in pins 8
     jmp pin POSITIVE_CAPTURE
