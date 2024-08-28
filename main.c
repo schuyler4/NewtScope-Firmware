@@ -99,7 +99,8 @@ int main(void)
                 break;
             case TRIGGER_COMMAND:
                 reset_triggers();
-                run_trigger();
+                force_trigger = 0;
+                trigger(&force_sampler, &normal_sampler, force_trigger);
                 break;
             case FORCE_TRIGGER_COMMAND:
                 {
@@ -182,6 +183,7 @@ void sampler_init(Sampler* sampler, uint8_t sampler_number, PIO pio_module)
 {
     sampler->created = 0;
     sampler->dma_channel = sampler_number;
+    sampler->second_dma_channel = sampler_number+1;
     sampler->pio = pio_module;
     sampler->sm = sampler_number;
     sampler->c = malloc(sizeof(pio_sm_config));
@@ -193,16 +195,6 @@ void reset_triggers(void)
     trigger_vector_available = 0;
     trigger_flag = 0;
     if(force_trigger) dma_hw->ints0 = 1 << force_sampler.dma_channel;
-    else dma_hw->ints0 = 1 << normal_sampler.dma_channel;
-}
-
-void run_trigger(void)
-{
-    force_trigger = 0;
-    if(!gpio_get(TRIGGER_PIN)) 
-        trigger(&force_sampler, &normal_sampler, force_trigger);
-    else if(!trigger_flag) 
-        trigger_flag = 1;
 }
 
 void get_string(char* str)
@@ -255,7 +247,9 @@ void dma_complete_handler(void)
     if(force_trigger)
     {
         dma_hw->ints0 = 1 << force_sampler.dma_channel;
-        //dma_channel_abort(force_sampler.dma_channel);
+        dma_channel_abort(force_sampler.dma_channel);
+        irq_set_enabled(DMA_IRQ_0, false);
+        irq_remove_handler(DMA_IRQ_0, dma_complete_handler);
     }
     else
     {
@@ -281,10 +275,10 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
         channel_config_set_read_increment(&c, false);
         channel_config_set_write_increment(&c, true);
         channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-        channel_config_set_chain_to(&c, 1);
+        channel_config_set_chain_to(&c, sampler.second_dma_channel);
         channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
         channel_config_set_ring(&c, true, 12);
-        dma_channel_config c2 = dma_channel_get_default_config(1);
+        dma_channel_config c2 = dma_channel_get_default_config(sampler.second_dma_channel);
         channel_config_set_read_increment(&c2, false);
         channel_config_set_write_increment(&c2, true);
         channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);
@@ -292,7 +286,8 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
         channel_config_set_dreq(&c2, pio_get_dreq(sampler.pio, sampler.sm, false));
         channel_config_set_ring(&c2, true, 12);
         dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, true);
-        dma_channel_configure(1, &c2,  &sampler.capture_buffer[4096], &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, false);
+        dma_channel_configure(sampler.second_dma_channel, &c2,  &sampler.capture_buffer[4096], 
+                              &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, false);
     }
     else
     {
@@ -301,7 +296,7 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
         channel_config_set_write_increment(&c, true);
         channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
         channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
-        dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/4, 1);
+        dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/4, true);
     }
 
     if(force_trigger)
@@ -320,7 +315,7 @@ uint16_t get_dma_last_index(Sampler normal_sampler)
 {
     if(dma_channel_is_busy(1)) 
         return SAMPLE_COUNT - (dma_channel_hw_addr(1)->transfer_count*4) - 1;
-    if(dma_channel_is_busy(0))
+    if(dma_channel_is_busy(normal_sampler.dma_channel))
         return SAMPLE_COUNT - (dma_channel_hw_addr(normal_sampler.dma_channel)->transfer_count*4) - 1 - (SAMPLE_COUNT/2);
     return 0;
 }
