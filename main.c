@@ -41,6 +41,7 @@ static Sampler force_sampler;
 static uint8_t aligned_memory[SAMPLE_COUNT] __attribute__((aligned(SAMPLE_COUNT)));
 
 uint clk_div;
+uint16_t last_index;
 
 int main(void)
 {
@@ -68,15 +69,8 @@ int main(void)
             }
             else
             {
-                flatten_ring_buffer(normal_sampler.capture_buffer, get_dma_last_index(normal_sampler), SAMPLE_COUNT);
-                //printf("last index: %d", get_dma_last_index(normal_sampler));
+                flatten_ring_buffer(normal_sampler.capture_buffer, last_index, SAMPLE_COUNT);
                 write(1, (char*)normal_sampler.capture_buffer, SAMPLE_COUNT*sizeof(char));
-                //pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
-                //pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
-                dma_channel_abort(normal_sampler.dma_channel);
-                //dma_channel_unclaim(normal_sampler.dma_channel);
-                dma_channel_abort(1);
-                //dma_channel_unclaim(1);
                 normal_sampler.created = 0;
             }
             trigger_vector_available = 0;
@@ -205,8 +199,10 @@ void reset_triggers(void)
 void run_trigger(void)
 {
     force_trigger = 0;
-    if(!gpio_get(TRIGGER_PIN)) trigger(&force_sampler, &normal_sampler, force_trigger);
-    else if(!trigger_flag) trigger_flag = 1;
+    if(!gpio_get(TRIGGER_PIN)) 
+        trigger(&force_sampler, &normal_sampler, force_trigger);
+    else if(!trigger_flag) 
+        trigger_flag = 1;
 }
 
 void get_string(char* str)
@@ -260,15 +256,16 @@ void dma_complete_handler(void)
     {
         dma_hw->ints0 = 1 << force_sampler.dma_channel;
         //dma_channel_abort(force_sampler.dma_channel);
-        //dma_channel_unclaim(force_sampler.dma_channel);
     }
     else
     {
         pio_interrupt_clear(normal_sampler.pio, 0);
+        last_index = get_dma_last_index(normal_sampler);
+        dma_channel_abort(normal_sampler.dma_channel);
+        dma_channel_abort(1);
         irq_set_enabled(pio_get_dreq(normal_sampler.pio, normal_sampler.sm, false), false);
         pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
         pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
-        //pio_sm_unclaim(normal_sampler.pio, normal_sampler.sm);
         irq_set_enabled(PIO0_IRQ_0, false);
         irq_remove_handler(PIO0_IRQ_0, dma_complete_handler);
         normal_sampler.created = 0;
@@ -278,11 +275,6 @@ void dma_complete_handler(void)
 
 void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t force_trigger)
 {
-    // DEBUG
-    uint16_t i;    
-    for(i = 0; i < SAMPLE_COUNT; i++) sampler.capture_buffer[i] = 0;
-    // DEBUG
-
     if(!force_trigger)
     {
         dma_channel_config c = dma_channel_get_default_config(sampler.dma_channel);
@@ -326,22 +318,11 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
 
 uint16_t get_dma_last_index(Sampler normal_sampler)
 {
-    busy_wait_ms(5);
     if(dma_channel_is_busy(1)) 
-    {
-        printf("HALTED 1 CHANNEL\n");
         return SAMPLE_COUNT - (dma_channel_hw_addr(1)->transfer_count*4) - 1;
-    }
-    else if(dma_channel_is_busy(0))
-    {
-        //return 0;
-        printf("HALTED 0 CHANNEL\n");
+    if(dma_channel_is_busy(0))
         return SAMPLE_COUNT - (dma_channel_hw_addr(normal_sampler.dma_channel)->transfer_count*4) - 1 - (SAMPLE_COUNT/2);
-    }
-    else
-    {
-        printf("Neither channel is busy");
-    }
+    return 0;
 }
 
 void update_clock(Sampler force_sampler, Sampler normal_sampler)

@@ -11,6 +11,9 @@ out y 32
 PRE_CAPTURE:
     in pins 8
     jmp y-- PRE_CAPTURE
+WAIT_FOR_LOW:
+    in pins 8
+    jmp pin WAIT_FOR_LOW
 .wrap_target
     in pins 8
     jmp pin POSITIVE_CAPTURE
