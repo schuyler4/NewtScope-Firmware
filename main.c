@@ -256,7 +256,7 @@ void dma_complete_handler(void)
         pio_interrupt_clear(normal_sampler.pio, 0);
         last_index = get_dma_last_index(normal_sampler);
         dma_channel_abort(normal_sampler.dma_channel);
-        dma_channel_abort(1);
+        dma_channel_abort(normal_sampler.second_dma_channel);
         irq_set_enabled(pio_get_dreq(normal_sampler.pio, normal_sampler.sm, false), false);
         pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
         pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
@@ -277,16 +277,16 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
         channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
         channel_config_set_chain_to(&c, sampler.second_dma_channel);
         channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
-        channel_config_set_ring(&c, true, 14);
+        channel_config_set_ring(&c, true, 13);
         dma_channel_config c2 = dma_channel_get_default_config(sampler.second_dma_channel);
         channel_config_set_read_increment(&c2, false);
         channel_config_set_write_increment(&c2, true);
         channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);
         channel_config_set_chain_to(&c2, sampler.dma_channel);
         channel_config_set_dreq(&c2, pio_get_dreq(sampler.pio, sampler.sm, false));
-        channel_config_set_ring(&c2, true, 14);
+        channel_config_set_ring(&c2, true, 13);
         dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, true);
-        dma_channel_configure(sampler.second_dma_channel, &c2,  &sampler.capture_buffer[16384], 
+        dma_channel_configure(sampler.second_dma_channel, &c2,  &sampler.capture_buffer[SAMPLE_COUNT/2], 
                               &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, false);
     }
     else
