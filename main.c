@@ -277,16 +277,16 @@ void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t 
         channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
         channel_config_set_chain_to(&c, sampler.second_dma_channel);
         channel_config_set_dreq(&c, pio_get_dreq(sampler.pio, sampler.sm, false));
-        channel_config_set_ring(&c, true, 12);
+        channel_config_set_ring(&c, true, 14);
         dma_channel_config c2 = dma_channel_get_default_config(sampler.second_dma_channel);
         channel_config_set_read_increment(&c2, false);
         channel_config_set_write_increment(&c2, true);
         channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);
         channel_config_set_chain_to(&c2, sampler.dma_channel);
         channel_config_set_dreq(&c2, pio_get_dreq(sampler.pio, sampler.sm, false));
-        channel_config_set_ring(&c2, true, 12);
+        channel_config_set_ring(&c2, true, 14);
         dma_channel_configure(sampler.dma_channel, &c,  sampler.capture_buffer, &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, true);
-        dma_channel_configure(sampler.second_dma_channel, &c2,  &sampler.capture_buffer[4096], 
+        dma_channel_configure(sampler.second_dma_channel, &c2,  &sampler.capture_buffer[16384], 
                               &sampler.pio->rxf[sampler.sm], SAMPLE_COUNT/8, false);
     }
     else
@@ -369,6 +369,10 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         normal_sampler->capture_buffer = aligned_memory; 
         if(!normal_sampler->created)
         {
+            uint8_t pin;
+            for(pin = 0; pin < 8; pin++)
+                pio_sm_set_consecutive_pindirs(normal_sampler->pio, normal_sampler->sm, pin, 1, false);
+            pio_gpio_init(normal_sampler->pio, TRIGGER_PIN);
             pio_sm_set_enabled(normal_sampler->pio, normal_sampler->sm, false);
             pio_sm_clear_fifos(normal_sampler->pio, normal_sampler->sm);
             pio_sm_restart(normal_sampler->pio, normal_sampler->sm);
