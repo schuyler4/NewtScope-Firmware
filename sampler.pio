@@ -63,10 +63,10 @@ LOOP_FOREVER:
 
     static inline void normal_trigger_sampler_init(Sampler sampler, uint pin_base, uint jmp_pin, uint clk_div)
     {
-        //if(sampler.trigger_type == RISING_EDGE)
-        //    *(sampler.c) = normal_trigger_positive_program_get_default_config(sampler.offset);
-        //else
-        *(sampler.c) = normal_trigger_negative_program_get_default_config(sampler.offset);
+        if(sampler.trigger_type == RISING_EDGE)
+            *(sampler.c) = normal_trigger_positive_program_get_default_config(sampler.offset);
+        else if(sampler.trigger_type == FALLING_EDGE)
+            *(sampler.c) = normal_trigger_negative_program_get_default_config(sampler.offset);
         sm_config_set_in_pins(sampler.c, pin_base);
         sm_config_set_clkdiv(sampler.c, clk_div);
         sm_config_set_jmp_pin(sampler.c, jmp_pin);
