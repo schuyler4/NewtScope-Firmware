@@ -14,10 +14,34 @@ PRE_CAPTURE:
 WAIT_FOR_LOW:
     in pins 8
     jmp pin WAIT_FOR_LOW
+; wait for the trigger event
 .wrap_target
     in pins 8
     jmp pin POSITIVE_CAPTURE
 .wrap
+POSITIVE_CAPTURE:
+    in pins 8
+    jmp x-- POSITIVE_CAPTURE
+    irq set 0
+LOOP_FOREVER:
+    jmp LOOP_FOREVER
+
+.program normal_trigger_negative
+pull
+out x 32
+pull
+out y 32
+PRE_CAPTURE:
+    in pins 8
+    jmp y-- PRE_CAPTURE
+; wait for high
+.wrap_target
+    in pins 8
+    jmp pin WAIT_FOR_TRIGGER 
+.wrap
+WAIT_FOR_TRIGGER:
+    in pins 8
+    jmp pin WAIT_FOR_TRIGGER
 POSITIVE_CAPTURE:
     in pins 8
     jmp x-- POSITIVE_CAPTURE
@@ -39,7 +63,10 @@ LOOP_FOREVER:
 
     static inline void normal_trigger_sampler_init(Sampler sampler, uint pin_base, uint jmp_pin, uint clk_div)
     {
-        *(sampler.c) = normal_trigger_positive_program_get_default_config(sampler.offset);
+        //if(sampler.trigger_type == RISING_EDGE)
+        //    *(sampler.c) = normal_trigger_positive_program_get_default_config(sampler.offset);
+        //else
+        *(sampler.c) = normal_trigger_negative_program_get_default_config(sampler.offset);
         sm_config_set_in_pins(sampler.c, pin_base);
         sm_config_set_clkdiv(sampler.c, clk_div);
         sm_config_set_jmp_pin(sampler.c, jmp_pin);

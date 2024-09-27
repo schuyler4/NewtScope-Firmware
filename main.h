@@ -53,6 +53,7 @@ typedef struct
     uint8_t* capture_buffer;
     uint offset;
     uint clock_div;
+    TriggerType trigger_type;
 } Sampler;
 
 void setup_IO(void);
@@ -61,7 +62,7 @@ void sampler_init(Sampler* sampler, uint8_t sampler_number, PIO pio_module);
 void update_clock(Sampler force_sampler, Sampler normal_sampler);
 uint8_t sampler_pio_init(Sampler sampler, uint8_t pin_base);
 uint16_t get_dma_last_index(Sampler sampler);
-void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t force_trigger);
+void arm_sampler(Sampler sampler, uint trigger_pin, uint8_t force_trigger);
 void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced);
 void trigger_callback(uint gpio, uint32_t event_mask);
 void transmit_vector(uint16_t* vector, uint16_t point_count);

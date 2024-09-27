@@ -30,7 +30,6 @@
 #define TEST_PIN 15
 
 static uint8_t trigger_flag = 0;
-TriggerType trigger_type = RISING_EDGE;
 uint8_t force_trigger = 0;
 
 static volatile uint8_t trigger_vector_available = 0;
@@ -92,10 +91,10 @@ int main(void)
                 gpio_put(RANGE_PIN, 1);
                 break;
             case RISING_EDGE_TRIGGER_COMMAND:
-                trigger_type = RISING_EDGE;
+                normal_sampler.trigger_type = RISING_EDGE;
                 break;
             case FALLING_EDGE_TRIGGER_COMMAND:
-                trigger_type = FALLING_EDGE;
+                normal_sampler.trigger_type = FALLING_EDGE;
                 break;
             case TRIGGER_COMMAND:
                 reset_triggers();
@@ -188,6 +187,7 @@ void sampler_init(Sampler* sampler, uint8_t sampler_number, PIO pio_module)
     sampler->sm = sampler_number;
     sampler->c = malloc(sizeof(pio_sm_config));
     *(sampler->c) = pio_get_default_sm_config();
+    sampler->trigger_type = RISING_EDGE;
 }
 
 void reset_triggers(void)
@@ -259,7 +259,10 @@ void dma_complete_handler(void)
         dma_channel_abort(normal_sampler.second_dma_channel);
         irq_set_enabled(pio_get_dreq(normal_sampler.pio, normal_sampler.sm, false), false);
         pio_sm_set_enabled(normal_sampler.pio, normal_sampler.sm, false);
-        pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
+        if(normal_sampler.trigger_type == RISING_EDGE)
+            pio_remove_program(normal_sampler.pio, &normal_trigger_positive_program, normal_sampler.offset);
+        else if(normal_sampler.trigger_type == FALLING_EDGE)
+            pio_remove_program(normal_sampler.pio, &normal_trigger_negative_program, normal_sampler.offset);
         irq_set_enabled(PIO0_IRQ_0, false);
         irq_remove_handler(PIO0_IRQ_0, dma_complete_handler);
         normal_sampler.created = 0;
@@ -267,7 +270,7 @@ void dma_complete_handler(void)
     trigger_vector_available = 1; 
 }
 
-void arm_sampler(Sampler sampler, uint trigger_pin, bool trigger_level, uint8_t force_trigger)
+void arm_sampler(Sampler sampler, uint trigger_pin, uint8_t force_trigger)
 {
     if(!force_trigger)
     {
@@ -343,7 +346,10 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
         if(normal_sampler->created)
         {
             pio_sm_set_enabled(normal_sampler->pio, normal_sampler->sm, false);
-            pio_remove_program(normal_sampler->pio, &normal_trigger_positive_program, normal_sampler->offset);
+            if(normal_sampler->trigger_type == RISING_EDGE)
+                pio_remove_program(normal_sampler->pio, &normal_trigger_positive_program, normal_sampler->offset);
+            else if(normal_sampler->trigger_type == FALLING_EDGE)
+                pio_remove_program(normal_sampler->pio, &normal_trigger_negative_program, normal_sampler->offset);
             normal_sampler->created = 0;
         }
         force_sampler->capture_buffer = malloc(SAMPLE_COUNT*sizeof(uint8_t));
@@ -356,7 +362,7 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
             force_trigger_sampler_init(*force_sampler, PIN_BASE, clk_div);
             force_sampler->created = 1;
         }
-        arm_sampler(*force_sampler, PIN_BASE, trigger_type, forced);
+        arm_sampler(*force_sampler, PIN_BASE, forced);
     }
     else
     {
@@ -380,10 +386,13 @@ void trigger(Sampler* force_sampler, Sampler* normal_sampler, uint8_t forced)
             pio_set_irq0_source_enabled(normal_sampler->pio, pis_interrupt0, true);
             irq_set_exclusive_handler(PIO0_IRQ_0, dma_complete_handler);
             irq_set_enabled(PIO0_IRQ_0, true);
-            normal_sampler->offset = pio_add_program(normal_sampler->pio, &normal_trigger_positive_program);
+            if(normal_sampler->trigger_type == RISING_EDGE)
+                normal_sampler->offset = pio_add_program(normal_sampler->pio, &normal_trigger_positive_program);
+            else if(normal_sampler->trigger_type == FALLING_EDGE)
+                normal_sampler->offset = pio_add_program(normal_sampler->pio, &normal_trigger_negative_program);
             normal_trigger_sampler_init(*normal_sampler, PIN_BASE, TRIGGER_PIN, clk_div);
             normal_sampler->created = 1;
         }
-        arm_sampler(*normal_sampler, PIN_BASE, trigger_type, forced);
+        arm_sampler(*normal_sampler, PIN_BASE, forced);
     }
 }
